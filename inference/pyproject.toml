@@ -1,0 +1,28 @@
+[project]
+name = "inference"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Youssef Abdelrahim", email = "youssefezzatw@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.4.6",
+    "opencv-python-headless>=4.13.0.92",
+    "pillow>=12.2.0",
+    "pydantic>=2.13.4",
+]
+
+[project.scripts]
+inference = "inference:main"
+
+[build-system]
+requires = ["uv_build>=0.11.7,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "ruff>=0.15.16",
+]
