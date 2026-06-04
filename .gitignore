@@ -1,0 +1,137 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.json.key
+credentials/
+secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyre/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.venv/
+venv/
+env/
+ENV/
+pip-wheel-metadata/
+*.egg-info/
+dist/
+build/
+
+# Jupyter and notebooks
+.ipynb_checkpoints/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+dist/
+build/
+.turbo/
+.vercel/
+.vite/
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Package manager caches
+.npm/
+.pnpm-store/
+.yarn/cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+.yarn/install-state.gz
+
+# Local databases and state
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.sqlite-journal
+local.db
+
+# Runtime logs
+logs/
+*.log
+*.pid
+*.seed
+
+# User uploads, temporary processing, and generated artifacts
+uploads/
+temp/
+tmp/
+storage/temp/
+backend/storage/temp/
+backend/app/storage/temp/
+data/uploads/
+data/tmp/
+data/temp/
+data/results/
+data/generated/
+data/exports/
+
+# Keep sample and eval folders trackable, but ignore their generated contents by default
+data/samples/*
+!data/samples/.gitkeep
+data/eval_images/*
+!data/eval_images/.gitkeep
+
+# Model files, checkpoints, and ML experiment output
+models/
+checkpoints/
+weights/
+artifacts/
+runs/
+wandb/
+mlruns/
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+*.engine
+*.bin
+
+# Hugging Face / model caches
+.cache/
+hf_cache/
+huggingface/
+
+# Docker and local deployment overrides
+docker-compose.override.yml
+*.local.yml
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+*.swo
+
+# Misc archives
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
