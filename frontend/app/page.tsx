@@ -1,65 +1,143 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+import { useMemo, useState } from "react";
+
+import { GazeMark } from "@/components/gaze-mark";
+import { OperatorControls } from "@/components/operator-controls";
+import { PhotoPreview } from "@/components/photo-preview";
+import { ProcessingPanel } from "@/components/processing-panel";
+import { QrCard } from "@/components/qr-card";
+import { ResultReport } from "@/components/result-report";
+import { SessionTimeline } from "@/components/session-timeline";
+import { StatusPill } from "@/components/status-pill";
+import {
+  boothStages,
+  demoSession,
+  getNextStage,
+  getPreviousStage,
+  stageCopy,
+  type BoothStage,
+} from "@/lib/booth-demo";
+
+function PrimaryPanel({ stage }: { stage: BoothStage }) {
+  if (stage === "waiting") {
+    return <QrCard session={demoSession} />;
+  }
+
+  if (stage === "processing") {
+    return (
+      <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+        <PhotoPreview participantName={demoSession.participantName} />
+        <ProcessingPanel />
+      </div>
+    );
+  }
+
+  if (stage === "ready") {
+    return (
+      <div className="grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
+        <PhotoPreview participantName={demoSession.participantName} />
+        <ResultReport session={demoSession} />
+      </div>
+    );
+  }
+
+  if (stage === "deleted") {
+    return (
+      <section className="border-2 border-brand-black bg-brand-black p-8 text-white shadow-[10px_10px_0_#52b49b]">
+        <div className="mx-auto max-w-2xl text-center">
+          <p className="text-sm font-black uppercase tracking-[0.18em] text-brand-mint">
+            Cleanup complete
+          </p>
+          <h2 className="mt-4 text-4xl font-black text-white">
+            Ready for the next participant
+          </h2>
+          <p className="mt-4 text-base leading-7 text-white/75">
+            In production, this state should only appear after the backend confirms deletion
+            of the upload, generated preview, inference output, and temporary session row.
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </section>
+    );
+  }
+
+  return (
+    <section className="border-2 border-brand-black bg-brand-mint p-6 shadow-[10px_10px_0_#000] sm:p-8">
+      <div className="grid gap-8 lg:grid-cols-[1fr_0.7fr] lg:items-center">
+        <div>
+          <p className="inline bg-brand-yellow px-2 text-sm font-black uppercase tracking-[0.18em] text-brand-black">
+            Visual privacy installation
+          </p>
+          <h2 className="mt-5 text-5xl font-black leading-none text-brand-pink sm:text-6xl">
+            One photo can become a profile.
+          </h2>
+          <p className="mt-5 max-w-2xl text-base font-medium leading-7 text-brand-black sm:text-lg">
+            This first interface models the event booth flow before the real backend and
+            GPU worker are connected. Start a session, show a QR code, process a photo,
+            reveal a report, then finish by deleting temporary data.
+          </p>
         </div>
-      </main>
-    </div>
+        <div className="border-2 border-brand-black bg-brand-cream p-5 shadow-[6px_6px_0_#c5227b]">
+          <GazeMark className="mx-auto mb-4 w-36" />
+          <p className="text-lg font-black text-brand-pink">Ethical boundary</p>
+          <p className="mt-3 text-sm font-medium leading-6 text-brand-black/75">
+            The final demo should label sensitive identity predictions as unsafe
+            speculation, not facts. The purpose is privacy literacy, not surveillance.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export default function Home() {
+  const [stage, setStage] = useState<BoothStage>("idle");
+  const copy = stageCopy[stage];
+
+  const stageIndex = useMemo(() => boothStages.indexOf(stage), [stage]);
+  const canGoBack = stageIndex > 0;
+  const canGoForward = stageIndex < boothStages.length - 1;
+
+  return (
+    <main className="min-h-screen overflow-hidden bg-brand-cream text-brand-black">
+      <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-6 px-5 py-6 sm:px-8 lg:px-10">
+        <header className="relative border-2 border-brand-black bg-white p-5 shadow-[10px_10px_0_#eda913] sm:p-7">
+          <div className="grid gap-6 lg:grid-cols-[1fr_17rem] lg:items-end">
+            <div>
+              <StatusPill stage={stage} label={copy.eyebrow} />
+              <h1 className="mt-5 text-6xl font-black leading-none tracking-normal text-brand-pink sm:text-7xl lg:text-8xl">
+                {copy.title}
+              </h1>
+              <p className="mt-5 max-w-3xl text-base font-medium leading-7 text-brand-black sm:text-lg">
+                {copy.description}
+              </p>
+            </div>
+            <div className="border-2 border-brand-black bg-brand-mint p-4">
+              <GazeMark className="mb-3 w-24" />
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-brand-black">
+                Booth mode
+              </p>
+              <p className="mt-2 text-sm font-medium leading-6 text-brand-black/75">
+                One participant at a time. Backend-owned sessions and auto-expiry will
+                replace this local mock state.
+              </p>
+            </div>
+          </div>
+          <div className="mt-6">
+            <SessionTimeline stage={stage} />
+          </div>
+        </header>
+
+        <PrimaryPanel stage={stage} />
+
+        <OperatorControls
+          canGoBack={canGoBack}
+          canGoForward={canGoForward}
+          onBack={() => setStage(getPreviousStage(stage))}
+          onNext={() => setStage(getNextStage(stage))}
+          onReset={() => setStage("idle")}
+        />
+      </div>
+    </main>
   );
 }
