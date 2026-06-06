@@ -1,10 +1,8 @@
-export type BoothStage = "idle" | "waiting" | "processing" | "ready" | "deleted";
+import type { BackendSession, InsightGroup } from "@/lib/backend-api";
 
-export type InsightGroup = {
-  title: string;
-  confidence: "high" | "medium" | "low";
-  items: string[];
-};
+export type BoothStage = "idle" | "waiting" | "processing" | "ready" | "deleted" | "expired" | "error";
+
+export type { InsightGroup };
 
 export type DemoSession = {
   id: string;
@@ -15,6 +13,11 @@ export type DemoSession = {
   observed: InsightGroup[];
   speculative: InsightGroup[];
   targeting: string[];
+  safetyNotes: string[];
+  model: {
+    name: string;
+    version: string;
+  } | null;
 };
 
 export const boothStages: BoothStage[] = [
@@ -23,6 +26,8 @@ export const boothStages: BoothStage[] = [
   "processing",
   "ready",
   "deleted",
+  "expired",
+  "error",
 ];
 
 export const stageCopy: Record<
@@ -49,7 +54,7 @@ export const stageCopy: Record<
     eyebrow: "Analysis running",
     title: "The model is reading visible signals",
     description:
-      "The screen shows processing while the backend will eventually run OCR, object detection, and a vision-language report.",
+      "The backend has accepted the photo and the inference worker can now analyze it.",
   },
   ready: {
     eyebrow: "Report ready",
@@ -61,60 +66,34 @@ export const stageCopy: Record<
     eyebrow: "Session closed",
     title: "Temporary data deleted",
     description:
-      "The final production flow should delete the image, generated previews, and temporary report data after finish or expiry.",
+      "The backend confirmed cleanup of the upload, generated report, and temporary session data.",
+  },
+  expired: {
+    eyebrow: "Session expired",
+    title: "Temporary data expired",
+    description:
+      "The upload window closed and the backend removed temporary personal data for this abandoned session.",
+  },
+  error: {
+    eyebrow: "Action needed",
+    title: "Session needs attention",
+    description:
+      "The backend reported an error for this session. Reset the booth view or start a fresh session.",
   },
 };
 
-export const demoSession: DemoSession = {
-  id: "MG-42A9",
-  participantName: "Mariam",
-  uploadUrl: "machinegaze.local/upload/MG-42A9",
-  expiresIn: "08:14",
-  riskScore: 72,
-  observed: [
-    {
-      title: "Visible scene",
-      confidence: "high",
-      items: ["one person in frame", "outdoor campus setting", "greenery", "glass building"],
-    },
-    {
-      title: "Detected signals",
-      confidence: "medium",
-      items: ["formal clothing", "round glasses", "possible badge text", "phone reflection"],
-    },
-    {
-      title: "Privacy exposure",
-      confidence: "medium",
-      items: ["face visible", "background location clues", "readable text may reveal affiliation"],
-    },
-  ],
-  speculative: [
-    {
-      title: "Weak profile guesses",
-      confidence: "low",
-      items: ["student or young professional", "career-focused setting", "prefers organized events"],
-    },
-    {
-      title: "Unsafe overreach",
-      confidence: "low",
-      items: ["income", "politics", "religion", "sexual orientation", "personality traits"],
-    },
-  ],
-  targeting: [
-    "professional clothing",
-    "student banking",
-    "seminar tickets",
-    "productivity tools",
-    "travel discounts",
-  ],
-};
+export function getStageFromSession(session: BackendSession | null): BoothStage {
+  if (!session) {
+    return "idle";
+  }
 
-export function getNextStage(stage: BoothStage) {
-  const currentIndex = boothStages.indexOf(stage);
-  return boothStages[Math.min(currentIndex + 1, boothStages.length - 1)];
+  if (session.status === "uploaded") {
+    return "processing";
+  }
+
+  return session.status;
 }
 
-export function getPreviousStage(stage: BoothStage) {
-  const currentIndex = boothStages.indexOf(stage);
-  return boothStages[Math.max(currentIndex - 1, 0)];
+export function isTerminalSessionStatus(status: BackendSession["status"]) {
+  return ["ready", "deleted", "expired", "error"].includes(status);
 }

@@ -7,13 +7,15 @@ const labels: Record<BoothStage, string> = {
   processing: "Analyze",
   ready: "Report",
   deleted: "Delete",
+  expired: "Expired",
+  error: "Error",
 };
 
 export function SessionTimeline({ stage }: { stage: BoothStage }) {
   const activeIndex = boothStages.indexOf(stage);
 
   return (
-    <ol className="grid grid-cols-5 gap-2">
+    <ol className="grid grid-cols-7 gap-2">
       {boothStages.map((item, index) => {
         const isActive = index === activeIndex;
         const isComplete = index < activeIndex;

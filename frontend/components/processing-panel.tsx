@@ -10,7 +10,7 @@ export function ProcessingPanel() {
         <div>
           <p className="text-xl font-black text-brand-pink">Processing image</p>
           <p className="mt-1 text-sm leading-6 text-brand-black/70">
-            Mocked state now. Later this will track the GPU worker job.
+            The GPU worker is running OCR, visual reasoning, and privacy report generation.
           </p>
         </div>
       </div>

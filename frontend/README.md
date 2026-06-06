@@ -1,5 +1,24 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Backend Proxy Config
+
+The frontend talks to FastAPI through Next.js route handlers so the browser never receives
+the backend admin token.
+
+Create `../.env` or `frontend/.env.local` with:
+
+```bash
+BACKEND_INTERNAL_URL=http://localhost:8000
+BACKEND_ADMIN_TOKEN=dev-admin-token
+```
+
+Start the backend before running the live booth flow:
+
+```bash
+cd ../backend
+uv run uvicorn backend.app:app --reload
+```
+
 ## Getting Started
 
 First, run the development server:

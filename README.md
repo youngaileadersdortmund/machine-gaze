@@ -2,7 +2,7 @@
 
 An interactive visual privacy demo for a university festival. Machine Gaze shows what AI systems can observe, infer, and over-assume from a single uploaded photo.
 
-The current version contains the initial frontend experience: a public booth display, a mobile upload placeholder, and an operator dashboard placeholder. Backend and inference projects are initialized but not wired into the frontend yet.
+The current version contains the initial frontend experience plus a working FastAPI backend and stub inference worker for the privacy-first festival flow.
 
 ## Project Structure
 
@@ -112,10 +112,11 @@ The backend is a Python/FastAPI project managed by `uv`.
 
 ```bash
 cd backend
-uv run python --version
+uv sync
+uv run uvicorn backend.app:app --reload
 ```
 
-The backend will own:
+The backend owns:
 
 - session creation and expiry
 - upload validation
@@ -124,16 +125,24 @@ The backend will own:
 - deletion after finish or timeout
 - admin/operator actions
 
+Create a session with:
+
+```bash
+curl -X POST http://localhost:8000/api/sessions \
+  -H "Authorization: Bearer dev-admin-token"
+```
+
 ## Inference
 
 The inference project is also managed by `uv`.
 
 ```bash
 cd inference
-uv run python --version
+uv sync --group gpu
+uv run --group gpu inference-worker --daemon --backend-url http://localhost:8000 --worker-token dev-worker-token
 ```
 
-The inference project will own:
+The inference project owns the report contract, a test stub, and a Qwen GPU worker for:
 
 - image preprocessing
 - OCR
@@ -142,11 +151,11 @@ The inference project will own:
 - privacy risk scoring
 - structured report generation
 
-GPU/PyTorch dependencies are intentionally not installed yet. Choose those after confirming the cluster CUDA/PyTorch compatibility and model plan.
+GPU/PyTorch dependencies are intentionally not installed yet. Add those after confirming the cluster CUDA/PyTorch compatibility and model plan.
 
 ## Development Notes
 
-The frontend currently uses mocked state so the booth flow can be designed before the backend and GPU worker are connected.
+The frontend uses Next.js proxy routes to connect the booth display, mobile upload flow, and admin dashboard to the FastAPI backend without exposing operator secrets in the browser.
 
 The intended production flow is:
 

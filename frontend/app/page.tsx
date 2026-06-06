@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { GazeMark } from "@/components/gaze-mark";
 import { OperatorControls } from "@/components/operator-controls";
@@ -11,33 +11,52 @@ import { ResultReport } from "@/components/result-report";
 import { SessionTimeline } from "@/components/session-timeline";
 import { StatusPill } from "@/components/status-pill";
 import {
-  boothStages,
-  demoSession,
-  getNextStage,
-  getPreviousStage,
-  stageCopy,
-  type BoothStage,
-} from "@/lib/booth-demo";
+  ApiError,
+  createSession,
+  finishSession,
+  getSession,
+  type BackendSession,
+} from "@/lib/backend-api";
+import { getStageFromSession, isTerminalSessionStatus, stageCopy, type BoothStage } from "@/lib/booth-demo";
+import { toDisplaySession } from "@/lib/session-mapping";
 
-function PrimaryPanel({ stage }: { stage: BoothStage }) {
-  if (stage === "waiting") {
-    return <QrCard session={demoSession} />;
+function messageFromError(error: unknown) {
+  if (error instanceof ApiError) {
+    return error.message;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return "Something went wrong while talking to the backend.";
+}
+
+function PrimaryPanel({
+  stage,
+  session,
+  errorMessage,
+}: {
+  stage: BoothStage;
+  session: ReturnType<typeof toDisplaySession> | null;
+  errorMessage?: string | null;
+}) {
+  if (stage === "waiting" && session) {
+    return <QrCard session={session} />;
   }
 
-  if (stage === "processing") {
+  if (stage === "processing" && session) {
     return (
       <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
-        <PhotoPreview participantName={demoSession.participantName} />
+        <PhotoPreview participantName={session.participantName} />
         <ProcessingPanel />
       </div>
     );
   }
 
-  if (stage === "ready") {
+  if (stage === "ready" && session) {
     return (
       <div className="grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
-        <PhotoPreview participantName={demoSession.participantName} />
-        <ResultReport session={demoSession} />
+        <PhotoPreview participantName={session.participantName} />
+        <ResultReport session={session} />
       </div>
     );
   }
@@ -53,8 +72,28 @@ function PrimaryPanel({ stage }: { stage: BoothStage }) {
             Ready for the next participant
           </h2>
           <p className="mt-4 text-base leading-7 text-white/75">
-            In production, this state should only appear after the backend confirms deletion
-            of the upload, generated preview, inference output, and temporary session row.
+            The backend confirmed deletion of temporary photo and report data.
+          </p>
+        </div>
+      </section>
+    );
+  }
+
+  if (stage === "expired" || stage === "error") {
+    return (
+      <section className="border-2 border-brand-black bg-white p-8 shadow-[10px_10px_0_#eda913]">
+        <div className="mx-auto max-w-2xl text-center">
+          <p className="text-sm font-black uppercase tracking-[0.18em] text-brand-pink">
+            {stage === "expired" ? "Expired" : "Backend error"}
+          </p>
+          <h2 className="mt-4 text-4xl font-black text-brand-pink">
+            {stage === "expired" ? "This session has closed" : "This session needs a reset"}
+          </h2>
+          <p className="mt-4 text-base leading-7 text-brand-black/75">
+            {errorMessage ||
+              (stage === "expired"
+                ? "The backend expired the session and removed temporary personal data."
+                : "The backend could not complete this session. Start a fresh session for the next participant.")}
           </p>
         </div>
       </section>
@@ -72,17 +111,16 @@ function PrimaryPanel({ stage }: { stage: BoothStage }) {
             One photo can become a profile.
           </h2>
           <p className="mt-5 max-w-2xl text-base font-medium leading-7 text-brand-black sm:text-lg">
-            This first interface models the event booth flow before the real backend and
-            GPU worker are connected. Start a session, show a QR code, process a photo,
-            reveal a report, then finish by deleting temporary data.
+            Start a backend-owned session, show a QR code, process a photo, reveal a
+            privacy report, then finish by deleting temporary data.
           </p>
         </div>
         <div className="border-2 border-brand-black bg-brand-cream p-5 shadow-[6px_6px_0_#c5227b]">
           <GazeMark className="mx-auto mb-4 w-36" />
           <p className="text-lg font-black text-brand-pink">Ethical boundary</p>
           <p className="mt-3 text-sm font-medium leading-6 text-brand-black/75">
-            The final demo should label sensitive identity predictions as unsafe
-            speculation, not facts. The purpose is privacy literacy, not surveillance.
+            Sensitive identity predictions are unsafe speculation, not facts. The purpose
+            is privacy literacy, not surveillance.
           </p>
         </div>
       </div>
@@ -91,12 +129,95 @@ function PrimaryPanel({ stage }: { stage: BoothStage }) {
 }
 
 export default function Home() {
-  const [stage, setStage] = useState<BoothStage>("idle");
-  const copy = stageCopy[stage];
+  const [session, setSession] = useState<BackendSession | null>(null);
+  const [uploadUrl, setUploadUrl] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isBusy, setIsBusy] = useState(false);
 
-  const stageIndex = useMemo(() => boothStages.indexOf(stage), [stage]);
-  const canGoBack = stageIndex > 0;
-  const canGoForward = stageIndex < boothStages.length - 1;
+  const stage = getStageFromSession(session);
+  const copy = stageCopy[stage];
+  const displaySession = useMemo(
+    () => (session ? toDisplaySession(session, uploadUrl || undefined) : null),
+    [session, uploadUrl],
+  );
+
+  const refreshSession = useCallback(async () => {
+    if (!session) {
+      return;
+    }
+
+    try {
+      const nextSession = await getSession(session.id);
+      setSession(nextSession);
+      setErrorMessage(nextSession.errorMessage || null);
+    } catch (error) {
+      setErrorMessage(messageFromError(error));
+    }
+  }, [session]);
+
+  useEffect(() => {
+    if (!session || isTerminalSessionStatus(session.status)) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      void refreshSession();
+    }, 1500);
+
+    return () => window.clearInterval(interval);
+  }, [refreshSession, session]);
+
+  async function handleStart() {
+    setIsBusy(true);
+    setErrorMessage(null);
+    try {
+      const created = await createSession();
+      setUploadUrl(created.uploadUrl);
+      setSession({
+        id: created.id,
+        status: created.status,
+        expiresAt: created.expiresAt,
+        displayName: null,
+        report: null,
+      });
+    } catch (error) {
+      setErrorMessage(messageFromError(error));
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function handleFinish() {
+    if (!session) {
+      return;
+    }
+
+    setIsBusy(true);
+    setErrorMessage(null);
+    try {
+      await finishSession(session.id);
+      setSession({
+        ...session,
+        status: "deleted",
+        displayName: null,
+        errorMessage: null,
+        report: null,
+      });
+    } catch (error) {
+      setErrorMessage(messageFromError(error));
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  function handleReset() {
+    setSession(null);
+    setUploadUrl(null);
+    setErrorMessage(null);
+  }
+
+  const canStart = !session || ["deleted", "expired", "error"].includes(session.status);
+  const canFinish = Boolean(session && !["deleted", "expired"].includes(session.status));
 
   return (
     <main className="min-h-screen overflow-hidden bg-brand-cream text-brand-black">
@@ -109,7 +230,7 @@ export default function Home() {
                 {copy.title}
               </h1>
               <p className="mt-5 max-w-3xl text-base font-medium leading-7 text-brand-black sm:text-lg">
-                {copy.description}
+                {errorMessage && stage === "idle" ? errorMessage : copy.description}
               </p>
             </div>
             <div className="border-2 border-brand-black bg-brand-mint p-4">
@@ -118,8 +239,7 @@ export default function Home() {
                 Booth mode
               </p>
               <p className="mt-2 text-sm font-medium leading-6 text-brand-black/75">
-                One participant at a time. Backend-owned sessions and auto-expiry will
-                replace this local mock state.
+                One participant at a time. Sessions and cleanup are owned by the backend.
               </p>
             </div>
           </div>
@@ -128,14 +248,15 @@ export default function Home() {
           </div>
         </header>
 
-        <PrimaryPanel stage={stage} />
+        <PrimaryPanel stage={stage} session={displaySession} errorMessage={session?.errorMessage || errorMessage} />
 
         <OperatorControls
-          canGoBack={canGoBack}
-          canGoForward={canGoForward}
-          onBack={() => setStage(getPreviousStage(stage))}
-          onNext={() => setStage(getNextStage(stage))}
-          onReset={() => setStage("idle")}
+          canStart={canStart}
+          canFinish={canFinish}
+          isBusy={isBusy}
+          onStart={handleStart}
+          onFinish={handleFinish}
+          onReset={handleReset}
         />
       </div>
     </main>

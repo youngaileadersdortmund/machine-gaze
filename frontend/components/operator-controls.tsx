@@ -1,14 +1,16 @@
 export function OperatorControls({
-  canGoBack,
-  canGoForward,
-  onBack,
-  onNext,
+  canStart,
+  canFinish,
+  isBusy,
+  onStart,
+  onFinish,
   onReset,
 }: {
-  canGoBack: boolean;
-  canGoForward: boolean;
-  onBack: () => void;
-  onNext: () => void;
+  canStart: boolean;
+  canFinish: boolean;
+  isBusy: boolean;
+  onStart: () => void;
+  onFinish: () => void;
   onReset: () => void;
 }) {
   return (
@@ -19,32 +21,33 @@ export function OperatorControls({
             Operator controls
           </p>
           <p className="mt-1 text-xs font-medium text-brand-black/65">
-            Temporary controls for walking through the booth states before backend wiring.
+            Start a backend session, finish cleanup, or reset the booth display.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={onBack}
-            disabled={!canGoBack}
+            onClick={onStart}
+            disabled={!canStart || isBusy}
             className="border-2 border-brand-black bg-brand-cream px-4 py-2 text-sm font-black text-brand-black transition hover:-translate-y-0.5 hover:shadow-[3px_3px_0_#000] disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Back
+            Start session
           </button>
           <button
             type="button"
             onClick={onReset}
+            disabled={isBusy}
             className="border-2 border-brand-black bg-white px-4 py-2 text-sm font-black text-brand-black transition hover:-translate-y-0.5 hover:shadow-[3px_3px_0_#000]"
           >
-            Reset
+            Reset view
           </button>
           <button
             type="button"
-            onClick={onNext}
-            disabled={!canGoForward}
+            onClick={onFinish}
+            disabled={!canFinish || isBusy}
             className="border-2 border-brand-black bg-brand-orange px-4 py-2 text-sm font-black text-brand-black transition hover:-translate-y-0.5 hover:shadow-[3px_3px_0_#000] disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Next state
+            Finish session
           </button>
         </div>
       </div>

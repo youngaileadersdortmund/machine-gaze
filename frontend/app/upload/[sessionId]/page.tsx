@@ -1,11 +1,15 @@
 import { GazeMark } from "@/components/gaze-mark";
+import { UploadForm } from "@/components/upload-form";
 
 export default async function UploadPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ sessionId: string }>;
+  searchParams: Promise<{ token?: string }>;
 }) {
   const { sessionId } = await params;
+  const { token = "" } = await searchParams;
 
   return (
     <main className="min-h-screen bg-brand-cream px-5 py-6 text-brand-black">
@@ -23,52 +27,15 @@ export default async function UploadPage({
             <GazeMark className="w-20 shrink-0" />
           </div>
           <p className="mt-4 text-sm font-medium leading-6 text-brand-black/75">
-            This mobile page is a static placeholder. Later it will upload the image to
-            FastAPI and attach it to this session.
+            Add one photo to this private booth session. The backend strips metadata and
+            deletes temporary data after the session finishes or expires.
           </p>
           <p className="mt-4 bg-brand-yellow px-3 py-2 font-mono text-sm font-black text-brand-black">
             {sessionId}
           </p>
         </section>
 
-        <form className="grid gap-4 border-2 border-brand-black bg-white p-6 shadow-[8px_8px_0_#c5227b]">
-          <label className="grid gap-2">
-            <span className="text-sm font-black uppercase tracking-[0.12em] text-brand-pink">
-              Display name
-            </span>
-            <input
-              type="text"
-              placeholder="Use a nickname"
-              className="border-2 border-brand-black bg-brand-cream px-3 py-3 text-base font-medium text-brand-black outline-none transition focus:shadow-[4px_4px_0_#eda913]"
-            />
-          </label>
-
-          <label className="grid gap-2">
-            <span className="text-sm font-black uppercase tracking-[0.12em] text-brand-pink">
-              Photo
-            </span>
-            <input
-              type="file"
-              accept="image/*"
-              className="border-2 border-dashed border-brand-black bg-brand-cream px-3 py-8 text-sm font-medium text-brand-black"
-            />
-          </label>
-
-          <label className="flex gap-3 border-2 border-brand-black bg-brand-mint p-3">
-            <input type="checkbox" className="mt-1 h-4 w-4 accent-brand-pink" />
-            <span className="text-sm font-medium leading-6 text-brand-black">
-              I understand this demo analyzes visible signals in my photo and deletes
-              temporary data after the session finishes or expires.
-            </span>
-          </label>
-
-          <button
-            type="button"
-            className="border-2 border-brand-black bg-brand-orange px-4 py-3 text-sm font-black text-brand-black transition hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#000]"
-          >
-            Submit photo
-          </button>
-        </form>
+        <UploadForm sessionId={sessionId} token={token} />
       </div>
     </main>
   );

@@ -1,4 +1,5 @@
 import type { DemoSession } from "@/lib/booth-demo";
+import { QRCodeSVG } from "qrcode.react";
 
 const qrCells = [
   1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0,
@@ -31,14 +32,23 @@ export function QrCard({ session }: { session: DemoSession }) {
       </div>
 
       <div className="mt-6 grid place-items-center border-2 border-brand-black bg-brand-cream p-5">
-        <div className="grid h-56 w-56 grid-cols-12 gap-1 bg-white p-4 shadow-[5px_5px_0_#c5227b]">
-          {qrCells.map((cell, index) => (
-            <span
-              // Static mock QR pattern until the backend provides the real upload URL.
-              key={`${cell}-${index}`}
-              className={cell ? "bg-brand-black" : "bg-white"}
+        <div className="grid h-56 w-56 place-items-center bg-white p-4 shadow-[5px_5px_0_#c5227b]">
+          {session.uploadUrl ? (
+            <QRCodeSVG
+              value={session.uploadUrl}
+              size={192}
+              bgColor="#ffffff"
+              fgColor="#000000"
+              level="M"
+              marginSize={1}
             />
-          ))}
+          ) : (
+            <div className="grid h-48 w-48 grid-cols-12 gap-1 bg-white">
+              {qrCells.map((cell, index) => (
+                <span key={`${cell}-${index}`} className={cell ? "bg-brand-black" : "bg-white"} />
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

@@ -87,6 +87,33 @@ export function ResultReport({ session }: { session: DemoSession }) {
           ))}
         </div>
       </section>
+
+      {session.safetyNotes.length ? (
+        <section className="border-2 border-brand-black bg-brand-yellow p-5 shadow-[6px_6px_0_#000]">
+          <h2 className="text-sm font-black uppercase tracking-[0.18em] text-brand-black">
+            Safety notes
+          </h2>
+          <ul className="mt-3 space-y-2">
+            {session.safetyNotes.map((note) => (
+              <li key={note} className="flex gap-2 text-sm font-medium leading-6 text-brand-black/80">
+                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-pink" />
+                <span>{note}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {session.model ? (
+        <section className="border-2 border-brand-black bg-brand-cream p-4">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-brand-pink">
+            Model
+          </p>
+          <p className="mt-1 break-all font-mono text-sm font-bold text-brand-black">
+            {session.model.name} · {session.model.version}
+          </p>
+        </section>
+      ) : null}
     </div>
   );
 }

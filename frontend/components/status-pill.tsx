@@ -6,6 +6,8 @@ const stageStyles: Record<BoothStage, string> = {
   processing: "border-brand-orange bg-brand-orange text-brand-black",
   ready: "border-brand-pink bg-brand-pink text-white",
   deleted: "border-brand-black bg-brand-black text-white",
+  expired: "border-brand-black bg-brand-yellow text-brand-black",
+  error: "border-brand-pink bg-white text-brand-pink",
 };
 
 export function StatusPill({
