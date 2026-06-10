@@ -1,0 +1,87 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      BACKEND_PUBLIC_URL: http://backend:8000
+      FRONTEND_PUBLIC_URL: ${FRONTEND_PUBLIC_URL:-http://localhost:3000}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-dev-admin-token}
+      WORKER_TOKEN: ${WORKER_TOKEN:-dev-worker-token}
+      SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-900}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-8}
+      DATABASE_URL: ${DATABASE_URL:-sqlite+aiosqlite:////app/data/machine_gaze.db}
+      UPLOAD_DIR: ${UPLOAD_DIR:-/app/data/uploads}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      WORKER_JOB_TIMEOUT_SECONDS: ${WORKER_JOB_TIMEOUT_SECONDS:-300}
+      WORKER_MAX_ATTEMPTS: ${WORKER_MAX_ATTEMPTS:-2}
+      WORKER_HEARTBEAT_TTL_SECONDS: ${WORKER_HEARTBEAT_TTL_SECONDS:-20}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - machine_gaze_data:/app/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    environment:
+      BACKEND_INTERNAL_URL: http://backend:8000
+      BACKEND_ADMIN_TOKEN: ${BACKEND_ADMIN_TOKEN:-dev-admin-token}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-dev-admin-token}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  inference-worker:
+    build:
+      context: .
+      dockerfile: inference/Dockerfile
+    environment:
+      INFERENCE_BACKEND_URL: http://backend:8000
+      INFERENCE_WORKER_TOKEN: ${INFERENCE_WORKER_TOKEN:-dev-worker-token}
+      INFERENCE_ANALYZER: ${INFERENCE_ANALYZER:-stub}
+      INFERENCE_MODEL_ID: ${INFERENCE_MODEL_ID:-Qwen/Qwen3-VL-30B-A3B-Thinking}
+      INFERENCE_POLL_SECONDS: ${INFERENCE_POLL_SECONDS:-1.5}
+      INFERENCE_MAX_NEW_TOKENS: ${INFERENCE_MAX_NEW_TOKENS:-900}
+      INFERENCE_DEVICE_MODE: ${INFERENCE_DEVICE_MODE:-auto}
+      HF_HOME: ${HF_HOME:-/app/hf_cache}
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - machine_gaze_hf_cache:/app/hf_cache
+    command: ["inference-worker", "--daemon"]
+    restart: unless-stopped
+
+volumes:
+  machine_gaze_data:
+  machine_gaze_hf_cache:

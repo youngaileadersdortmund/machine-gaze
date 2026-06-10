@@ -19,10 +19,13 @@ function formatRemaining(expiresAt: string) {
 }
 
 export function toDisplaySession(session: BackendSession, uploadUrl?: string): DemoSession {
+  const hasUpload = ["uploaded", "processing", "ready"].includes(session.status);
+
   return {
     id: session.id,
     participantName: session.displayName || "Current participant",
     uploadUrl: uploadUrl || `/upload/${session.id}`,
+    previewUrl: hasUpload ? `/api/backend/sessions/${encodeURIComponent(session.id)}/preview` : null,
     expiresIn: formatRemaining(session.expiresAt),
     riskScore: session.report?.riskScore ?? 0,
     observed: session.report?.observed ?? [],

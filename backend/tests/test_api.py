@@ -173,6 +173,26 @@ def test_valid_upload_sanitizes_image_and_worker_can_complete(client: TestClient
     assert ready_payload["report"]["riskScore"] == 72
 
 
+def test_session_preview_requires_admin_and_streams_sanitized_image(client: TestClient):
+    session_payload = create_session(client)
+
+    waiting_preview = client.get(f"/api/sessions/{session_payload['id']}/preview", headers=ADMIN_HEADERS)
+    assert waiting_preview.status_code == 404
+
+    upload_photo(client, session_payload)
+
+    rejected = client.get(f"/api/sessions/{session_payload['id']}/preview")
+    assert rejected.status_code == 401
+
+    preview = client.get(f"/api/sessions/{session_payload['id']}/preview", headers=ADMIN_HEADERS)
+    assert preview.status_code == 200
+    assert preview.headers["cache-control"] == "no-store"
+
+    with Image.open(BytesIO(preview.content)) as image:
+        assert image.size == (128, 96)
+        assert image.mode == "RGB"
+
+
 def test_finish_deletes_files_report_and_jobs(client: TestClient):
     session_payload = create_session(client)
     upload_photo(client, session_payload)

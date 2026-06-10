@@ -124,6 +124,19 @@ async def get_session_route(session_id: str, db: AsyncSession = Depends(get_db))
     return session_response(session)
 
 
+@app.get(
+    "/api/sessions/{session_id}/preview",
+    dependencies=[Depends(require_admin)],
+)
+async def session_preview_route(session_id: str, db: AsyncSession = Depends(get_db)) -> FileResponse:
+    session = await get_session_or_404(db, session_id)
+    await ensure_active_session(session)
+    if session.status not in {"uploaded", "processing", "ready"}:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No uploaded image is available.")
+    image_path = ensure_image_exists(session)
+    return FileResponse(path=image_path, headers={"Cache-Control": "no-store"})
+
+
 @app.post("/api/sessions/{session_id}/upload", response_model=SessionPublicResponse)
 async def upload_photo_route(
     session_id: str,

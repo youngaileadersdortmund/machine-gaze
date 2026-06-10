@@ -1,0 +1,15 @@
+services:
+  inference-worker:
+    build:
+      args:
+        UV_SYNC_ARGS: "--no-dev --group gpu"
+    environment:
+      INFERENCE_ANALYZER: ${INFERENCE_ANALYZER:-qwen}
+    command: ["inference-worker", "--daemon", "--analyzer", "qwen"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: ["gpu"]

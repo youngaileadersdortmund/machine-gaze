@@ -46,7 +46,7 @@ function PrimaryPanel({
   if (stage === "processing" && session) {
     return (
       <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
-        <PhotoPreview participantName={session.participantName} />
+        <PhotoPreview participantName={session.participantName} previewUrl={session.previewUrl} />
         <ProcessingPanel />
       </div>
     );
@@ -55,7 +55,7 @@ function PrimaryPanel({
   if (stage === "ready" && session) {
     return (
       <div className="grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
-        <PhotoPreview participantName={session.participantName} />
+        <PhotoPreview participantName={session.participantName} previewUrl={session.previewUrl} />
         <ResultReport session={session} />
       </div>
     );

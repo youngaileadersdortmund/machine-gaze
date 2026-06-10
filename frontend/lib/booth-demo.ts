@@ -8,6 +8,7 @@ export type DemoSession = {
   id: string;
   participantName: string;
   uploadUrl: string;
+  previewUrl: string | null;
   expiresIn: string;
   riskScore: number;
   observed: InsightGroup[];

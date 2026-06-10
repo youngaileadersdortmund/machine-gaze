@@ -2,7 +2,8 @@
 
 An interactive visual privacy demo for a university festival. Machine Gaze shows what AI systems can observe, infer, and over-assume from a single uploaded photo.
 
-The current version contains the initial frontend experience plus a working FastAPI backend and stub inference worker for the privacy-first festival flow.
+The current version contains a connected frontend, a working FastAPI backend, a fast
+stub worker for smoke tests, and a Qwen GPU worker for live privacy reports.
 
 ## Project Structure
 
@@ -20,8 +21,8 @@ The current version contains the initial frontend experience plus a working Fast
 
 ```text
 /                    Public booth display
-/admin               Operator dashboard placeholder
-/upload/[sessionId]  Mobile upload placeholder
+/admin               Operator dashboard
+/upload/[sessionId]  Mobile upload page
 ```
 
 Example upload route:
@@ -34,8 +35,10 @@ http://localhost:3000/upload/MG-42A9
 
 - Node.js and npm for the frontend
 - uv and Python 3.12 for backend/inference development
+- Optional: NVIDIA GPU + CUDA-compatible PyTorch for the Qwen inference worker
 
-On the cluster, Node was installed with `nvm`. If `npm` is missing in a new shell, load `nvm` first:
+On many university clusters, Node is loaded through `nvm` or a module system. If `npm`
+is missing in a new shell, try loading your login profile first:
 
 ```bash
 source ~/.profile
@@ -48,14 +51,98 @@ node --version
 npm --version
 ```
 
-## Run The Website Locally
+## Run Without Docker
 
-From the project root:
+Use this path on servers or university clusters where Docker is not available.
+
+From the project root, start backend, frontend, and the inference worker together:
+
+```bash
+./scripts/run-dev.sh
+```
+
+Defaults:
+
+- frontend: `http://localhost:3000`
+- backend health: `http://localhost:8000/health`
+- inference worker: real `qwen` analyzer
+- backend token defaults come from `.env.example`
+
+For a fast smoke test without loading the model:
+
+```bash
+INFERENCE_ANALYZER=stub ./scripts/run-dev.sh
+```
+
+The default Qwen path downloads model weights into `HF_HOME` on first run. It needs a
+visible NVIDIA GPU and the `inference` GPU dependency group.
+
+### Remote Cluster Access
+
+If the services run on a remote login node or compute node, keep `./scripts/run-dev.sh`
+running there and open an SSH tunnel from your laptop:
+
+```bash
+ssh -L 3000:localhost:3000 -L 8000:localhost:8000 <user>@<host>
+```
+
+Replace `<user>` and `<host>` with your own university account and server hostname.
+Then open on your laptop:
+
+```text
+http://localhost:3000
+```
+
+If your cluster requires connecting through a login node to a compute node, use the
+equivalent SSH tunnel or `ProxyJump` command for your environment.
+
+### Manual No-Docker Startup
+
+If you prefer separate terminals, run these from the project root.
+
+Terminal 1, backend:
+
+```bash
+cd backend
+uv sync
+uv run uvicorn backend.app:app --host 0.0.0.0 --port 8000
+```
+
+Terminal 2, frontend:
 
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev -- --hostname 0.0.0.0 --port 3000
+```
+
+Terminal 3, fast stub inference worker:
+
+```bash
+cd inference
+uv sync
+INFERENCE_ANALYZER=stub uv run inference-worker --daemon \
+  --backend-url http://localhost:8000 \
+  --worker-token dev-worker-token
+```
+
+Terminal 3, real Qwen GPU worker:
+
+```bash
+cd inference
+uv sync --group gpu
+uv run --group gpu inference-worker --daemon --analyzer qwen \
+  --backend-url http://localhost:8000 \
+  --worker-token dev-worker-token
+```
+
+## Run With Docker
+
+Docker is optional. Use it only on machines where Docker Engine or Docker Desktop is
+already available.
+
+```bash
+docker compose up --build
 ```
 
 Open:
@@ -64,23 +151,58 @@ Open:
 http://localhost:3000
 ```
 
-If you are running the dev server on a remote machine or cluster node, bind to all interfaces:
+Check backend health:
 
 ```bash
-cd frontend
-npm run dev -- --hostname 0.0.0.0
+curl http://localhost:8000/health
 ```
 
-If you are viewing from your laptop through SSH, use port forwarding:
+The default Compose stack starts:
+
+- FastAPI backend on `http://localhost:8000`
+- Next.js frontend on `http://localhost:3000`
+- continuous inference worker using the fast stub analyzer
+- persistent Docker volumes for SQLite/uploads and Hugging Face cache
+
+Follow logs:
 
 ```bash
-ssh -L 3000:localhost:3000 abdelrahim@ml2ran12
+docker compose logs -f backend frontend inference-worker
 ```
 
-Then open on your laptop:
+Stop the stack:
 
-```text
-http://localhost:3000
+```bash
+docker compose down
+```
+
+Delete persisted session/model-cache volumes:
+
+```bash
+docker compose down -v
+```
+
+### Docker GPU Worker
+
+To run the real Qwen worker instead of the stub worker, use the GPU override:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
+```
+
+This builds the inference image with the `gpu` dependency group and requests one NVIDIA
+GPU for `inference-worker`. The first run downloads `Qwen/Qwen3-VL-30B-A3B-Thinking`
+into the `machine_gaze_hf_cache` Docker volume.
+
+Useful Docker environment overrides:
+
+```bash
+FRONTEND_PUBLIC_URL=http://your-hostname:3000
+ADMIN_TOKEN=change-me
+BACKEND_ADMIN_TOKEN=change-me
+WORKER_TOKEN=change-me
+INFERENCE_WORKER_TOKEN=change-me
+docker compose up --build
 ```
 
 ## Frontend Quality Checks
@@ -136,10 +258,24 @@ curl -X POST http://localhost:8000/api/sessions \
 
 The inference project is also managed by `uv`.
 
+Fast stub worker:
+
+```bash
+cd inference
+uv sync
+INFERENCE_ANALYZER=stub uv run inference-worker --daemon \
+  --backend-url http://localhost:8000 \
+  --worker-token dev-worker-token
+```
+
+Real Qwen GPU worker:
+
 ```bash
 cd inference
 uv sync --group gpu
-uv run --group gpu inference-worker --daemon --backend-url http://localhost:8000 --worker-token dev-worker-token
+uv run --group gpu inference-worker --daemon --analyzer qwen \
+  --backend-url http://localhost:8000 \
+  --worker-token dev-worker-token
 ```
 
 The inference project owns the report contract, a test stub, and a Qwen GPU worker for:
@@ -151,7 +287,8 @@ The inference project owns the report contract, a test stub, and a Qwen GPU work
 - privacy risk scoring
 - structured report generation
 
-GPU/PyTorch dependencies are intentionally not installed yet. Add those after confirming the cluster CUDA/PyTorch compatibility and model plan.
+The Qwen worker requires a CUDA-compatible PyTorch install and a visible NVIDIA GPU.
+The first run may take a while because model weights are downloaded into `HF_HOME`.
 
 ## Development Notes
 
