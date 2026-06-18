@@ -1,7 +1,7 @@
 # Machine Gaze Backend
 
 FastAPI service for the festival booth flow. It creates short-lived upload sessions,
-validates and sanitizes one photo per session, queues inference work in SQLite, serves
+validates and sanitizes one photo per session, queues worker jobs in SQLite, serves
 worker-only image downloads, stores temporary reports, and deletes personal data on
 finish or expiry.
 
@@ -62,7 +62,7 @@ deletes raw upload bytes immediately.
 
 ## Worker Health
 
-The inference worker should send heartbeats to:
+A worker should send heartbeats to:
 
 ```text
 POST /api/worker/heartbeat
@@ -73,8 +73,8 @@ with:
 ```json
 {
   "status": "warming",
-  "modelId": "Qwen/Qwen3-VL-30B-A3B-Thinking",
-  "modelVersion": "transformers"
+  "modelId": "gemini-2.5-flash",
+  "modelVersion": "vertex-ai:us-central1"
 }
 ```
 
@@ -100,11 +100,22 @@ curl -X POST "http://localhost:8000/api/sessions/MG-XXXX/upload?token=TOKEN" \
   -F "file=@/path/to/photo.jpg"
 ```
 
-Run one inference worker job from `../inference`:
+Claim a queued job:
 
 ```bash
-uv run inference-worker --backend-url http://localhost:8000 --worker-token dev-worker-token
+curl -X POST http://localhost:8000/api/worker/jobs/claim \
+  -H "Authorization: Bearer dev-worker-token"
 ```
+
+Complete a claimed job by posting a Big Five report to:
+
+```text
+POST /api/worker/jobs/{job_id}/complete
+```
+
+The report must include exactly these trait keys: `openness`, `conscientiousness`,
+`extraversion`, `agreeableness`, and `neuroticism`. Each trait has a `scorePercent`
+from 0 to 100, where higher means more of that named trait.
 
 Poll the report:
 

@@ -1,27 +1,5 @@
-from .analyzer import (
-    GeminiAnalyzer,
-    GoogleVisionAnalyzer,
-    QwenAnalyzer,
-    StubAnalyzer,
-    analyze_image,
-    build_analyzer,
-)
-from .contracts import InsightGroup, ModelMetadata, PrivacyReport
+"""Machine Gaze Gemini inference worker."""
 
+__all__ = ["__version__"]
 
-def main() -> None:
-    print("Inference package ready. Use inference.worker for backend job processing.")
-
-
-__all__ = [
-    "InsightGroup",
-    "ModelMetadata",
-    "PrivacyReport",
-    "GeminiAnalyzer",
-    "GoogleVisionAnalyzer",
-    "QwenAnalyzer",
-    "StubAnalyzer",
-    "analyze_image",
-    "build_analyzer",
-    "main",
-]
+__version__ = "0.1.0"

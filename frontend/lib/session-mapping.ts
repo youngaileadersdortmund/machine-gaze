@@ -27,11 +27,8 @@ export function toDisplaySession(session: BackendSession, uploadUrl?: string): D
     uploadUrl: uploadUrl || `/upload/${session.id}`,
     previewUrl: hasUpload ? `/api/backend/sessions/${encodeURIComponent(session.id)}/preview` : null,
     expiresIn: formatRemaining(session.expiresAt),
-    riskScore: session.report?.riskScore ?? 0,
-    observed: session.report?.observed ?? [],
-    speculative: session.report?.speculative ?? [],
-    targeting: session.report?.targeting ?? [],
-    safetyNotes: session.report?.safetyNotes ?? [],
+    traits: session.report?.traits ?? [],
+    machineGuess: session.report?.machineGuess ?? null,
     model: session.report?.model ?? null,
   };
 }

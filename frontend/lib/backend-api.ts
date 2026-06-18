@@ -7,20 +7,32 @@ export type BackendSessionStatus =
   | "expired"
   | "error";
 
-export type Confidence = "high" | "medium" | "low";
+export type TraitKey =
+  | "openness"
+  | "conscientiousness"
+  | "extraversion"
+  | "agreeableness"
+  | "neuroticism";
 
-export type InsightGroup = {
-  title: string;
-  confidence: Confidence;
-  items: string[];
+export type TraitReport = {
+  key: TraitKey;
+  name: string;
+  scorePercent: number;
+  lowLabel: string;
+  highLabel: string;
+  summary: string;
 };
 
-export type PrivacyReport = {
-  riskScore: number;
-  observed: InsightGroup[];
-  speculative: InsightGroup[];
-  targeting: string[];
-  safetyNotes: string[];
+export type MachineGuess = {
+  probablyStudies: string;
+  campusRole: string;
+  futureForecast: string;
+  classicStruggle: string;
+};
+
+export type PersonalityReport = {
+  traits: TraitReport[];
+  machineGuess: MachineGuess;
   model: {
     name: string;
     version: string;
@@ -35,7 +47,7 @@ export type BackendSession = {
   uploadedAt?: string | null;
   processedAt?: string | null;
   errorMessage?: string | null;
-  report?: PrivacyReport | null;
+  report?: PersonalityReport | null;
 };
 
 export type SessionCreateResponse = {

@@ -80,6 +80,70 @@ def upload_photo(client: TestClient, session_payload: dict) -> dict:
     return response.json()
 
 
+def make_trait_report(traits: list[dict] | None = None, machine_guess: dict | None = None) -> dict:
+    return {
+        "traits": traits
+        or [
+            {
+                "key": "openness",
+                "name": "Openness",
+                "scorePercent": 72,
+                "lowLabel": "Practical",
+                "highLabel": "Curious",
+                "summary": "The image reads as curious and open to novelty.",
+            },
+            {
+                "key": "conscientiousness",
+                "name": "Conscientiousness",
+                "scorePercent": 64,
+                "lowLabel": "Spontaneous",
+                "highLabel": "Organized",
+                "summary": "The presentation suggests a fairly organized operator.",
+            },
+            {
+                "key": "extraversion",
+                "name": "Extraversion",
+                "scorePercent": 58,
+                "lowLabel": "Introverted",
+                "highLabel": "Extraverted",
+                "summary": "The pose gives moderate social energy.",
+            },
+            {
+                "key": "agreeableness",
+                "name": "Agreeableness",
+                "scorePercent": 69,
+                "lowLabel": "Skeptical",
+                "highLabel": "Cooperative",
+                "summary": "The expression comes across as warm and approachable.",
+            },
+            {
+                "key": "neuroticism",
+                "name": "Neuroticism",
+                "scorePercent": 33,
+                "lowLabel": "Calm",
+                "highLabel": "Reactive",
+                "summary": "The image projects a calm, steady surface.",
+            },
+        ],
+        "machineGuess": machine_guess
+        or {
+            "probablyStudies": "Design, media, or something with too many project deadlines.",
+            "campusRole": "The friend who says they will organize it and then actually does.",
+            "futureForecast": "Will accidentally become the responsible one in a group project.",
+            "classicStruggle": "Takes on one extra thing because it looks quick.",
+        },
+        "model": {"name": "test-model", "version": "0.1"},
+    }
+
+
+def claim_uploaded_job(client: TestClient) -> tuple[dict, dict]:
+    session_payload = create_session(client)
+    upload_photo(client, session_payload)
+    claim = client.post("/api/worker/jobs/claim", headers=WORKER_HEADERS)
+    assert claim.status_code == 200
+    return session_payload, claim.json()
+
+
 def test_create_session_requires_admin_and_returns_upload_url(client: TestClient):
     rejected = client.post("/api/sessions")
     assert rejected.status_code == 401
@@ -151,18 +215,10 @@ def test_valid_upload_sanitizes_image_and_worker_can_complete(client: TestClient
     )
     assert image_response.status_code == 200
 
-    report = {
-        "riskScore": 72,
-        "observed": [{"title": "Visible scene", "confidence": "high", "items": ["one person in frame"]}],
-        "speculative": [{"title": "Weak guesses", "confidence": "low", "items": ["student or visitor"]}],
-        "targeting": ["AI literacy"],
-        "safetyNotes": ["Protected traits are unsafe overreach examples, not predictions."],
-        "model": {"name": "test-model", "version": "0.1"},
-    }
     complete = client.post(
         f"/api/worker/jobs/{claim_payload['id']}/complete",
         headers=WORKER_HEADERS,
-        json=report,
+        json=make_trait_report(),
     )
     assert complete.status_code == 200
 
@@ -170,7 +226,59 @@ def test_valid_upload_sanitizes_image_and_worker_can_complete(client: TestClient
     assert ready.status_code == 200
     ready_payload = ready.json()
     assert ready_payload["status"] == "ready"
-    assert ready_payload["report"]["riskScore"] == 72
+    assert [trait["key"] for trait in ready_payload["report"]["traits"]] == [
+        "openness",
+        "conscientiousness",
+        "extraversion",
+        "agreeableness",
+        "neuroticism",
+    ]
+    assert ready_payload["report"]["traits"][2]["scorePercent"] == 58
+    assert ready_payload["report"]["machineGuess"]["classicStruggle"] == "Takes on one extra thing because it looks quick."
+
+
+def test_worker_complete_rejects_invalid_big_five_reports(client: TestClient):
+    valid_traits = make_trait_report()["traits"]
+
+    for traits in [
+        valid_traits[:4],
+        [*valid_traits[:4], valid_traits[0]],
+        [*valid_traits[:4], {**valid_traits[4], "scorePercent": 101}],
+    ]:
+        _, claim = claim_uploaded_job(client)
+        response = client.post(
+            f"/api/worker/jobs/{claim['id']}/complete",
+            headers=WORKER_HEADERS,
+            json=make_trait_report(traits=traits),
+        )
+        assert response.status_code == 422
+
+
+def test_worker_complete_rejects_missing_or_empty_machine_guess(client: TestClient):
+    _, claim = claim_uploaded_job(client)
+    missing_guess = make_trait_report()
+    missing_guess.pop("machineGuess")
+    missing_response = client.post(
+        f"/api/worker/jobs/{claim['id']}/complete",
+        headers=WORKER_HEADERS,
+        json=missing_guess,
+    )
+    assert missing_response.status_code == 422
+
+    _, claim = claim_uploaded_job(client)
+    empty_response = client.post(
+        f"/api/worker/jobs/{claim['id']}/complete",
+        headers=WORKER_HEADERS,
+        json=make_trait_report(
+            machine_guess={
+                "probablyStudies": "",
+                "campusRole": "Organizer",
+                "futureForecast": "Responsible one.",
+                "classicStruggle": "Too many tabs open.",
+            }
+        ),
+    )
+    assert empty_response.status_code == 422
 
 
 def test_session_preview_requires_admin_and_streams_sanitized_image(client: TestClient):
@@ -198,15 +306,7 @@ def test_finish_deletes_files_report_and_jobs(client: TestClient):
     upload_photo(client, session_payload)
 
     claim = client.post("/api/worker/jobs/claim", headers=WORKER_HEADERS).json()
-    report = {
-        "riskScore": 10,
-        "observed": [{"title": "Visible scene", "confidence": "high", "items": ["campus"]}],
-        "speculative": [],
-        "targeting": [],
-        "safetyNotes": ["No protected traits are predicted."],
-        "model": {"name": "test-model", "version": "0.1"},
-    }
-    client.post(f"/api/worker/jobs/{claim['id']}/complete", headers=WORKER_HEADERS, json=report)
+    client.post(f"/api/worker/jobs/{claim['id']}/complete", headers=WORKER_HEADERS, json=make_trait_report())
 
     async def get_before():
         async with client.test_session_factory() as db:
@@ -268,7 +368,7 @@ def test_worker_heartbeat_updates_health(client: TestClient):
         headers=WORKER_HEADERS,
         json={
             "status": "ready",
-            "modelId": "Qwen/Qwen3-VL-30B-A3B-Thinking",
+            "modelId": "festival-persona-worker",
             "modelVersion": "test",
         },
     )
@@ -276,7 +376,7 @@ def test_worker_heartbeat_updates_health(client: TestClient):
 
     health = client.get("/health").json()
     assert health["workerStatus"] == "ready"
-    assert health["modelId"] == "Qwen/Qwen3-VL-30B-A3B-Thinking"
+    assert health["modelId"] == "festival-persona-worker"
     assert health["lastSeenAt"]
 
 

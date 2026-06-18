@@ -34,14 +34,22 @@ export function QrCard({ session }: { session: DemoSession }) {
       <div className="mt-6 grid place-items-center border-2 border-brand-black bg-brand-cream p-5">
         <div className="grid h-56 w-56 place-items-center bg-white p-4 shadow-[5px_5px_0_#c5227b]">
           {session.uploadUrl ? (
-            <QRCodeSVG
-              value={session.uploadUrl}
-              size={192}
-              bgColor="#ffffff"
-              fgColor="#000000"
-              level="M"
-              marginSize={1}
-            />
+            <a
+              href={session.uploadUrl}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`Open upload link for session ${session.id}`}
+              className="block transition hover:scale-[1.02] focus:outline-none focus:ring-4 focus:ring-brand-yellow"
+            >
+              <QRCodeSVG
+                value={session.uploadUrl}
+                size={192}
+                bgColor="#ffffff"
+                fgColor="#000000"
+                level="M"
+                marginSize={1}
+              />
+            </a>
           ) : (
             <div className="grid h-48 w-48 grid-cols-12 gap-1 bg-white">
               {qrCells.map((cell, index) => (
@@ -56,7 +64,18 @@ export function QrCard({ session }: { session: DemoSession }) {
         <p className="text-xs font-black uppercase tracking-[0.18em] text-brand-mint">
           Upload link
         </p>
-        <p className="mt-1 break-all font-mono text-sm text-white">{session.uploadUrl}</p>
+        {session.uploadUrl ? (
+          <a
+            href={session.uploadUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-1 block break-all font-mono text-sm text-white underline decoration-brand-mint decoration-2 underline-offset-4 transition hover:text-brand-mint"
+          >
+            {session.uploadUrl}
+          </a>
+        ) : (
+          <p className="mt-1 break-all font-mono text-sm text-white">Waiting for upload link</p>
+        )}
       </div>
     </section>
   );

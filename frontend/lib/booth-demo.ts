@@ -1,8 +1,8 @@
-import type { BackendSession, InsightGroup } from "@/lib/backend-api";
+import type { BackendSession, MachineGuess, TraitReport } from "@/lib/backend-api";
 
 export type BoothStage = "idle" | "waiting" | "processing" | "ready" | "deleted" | "expired" | "error";
 
-export type { InsightGroup };
+export type { MachineGuess, TraitReport };
 
 export type DemoSession = {
   id: string;
@@ -10,11 +10,8 @@ export type DemoSession = {
   uploadUrl: string;
   previewUrl: string | null;
   expiresIn: string;
-  riskScore: number;
-  observed: InsightGroup[];
-  speculative: InsightGroup[];
-  targeting: string[];
-  safetyNotes: string[];
+  traits: TraitReport[];
+  machineGuess: MachineGuess | null;
   model: {
     name: string;
     version: string;
@@ -53,9 +50,9 @@ export const stageCopy: Record<
   },
   processing: {
     eyebrow: "Analysis running",
-    title: "The model is reading visible signals",
+    title: "Reading the personality signals",
     description:
-      "The backend has accepted the photo and the inference worker can now analyze it.",
+      "The backend has accepted the photo and the inference worker can now generate a Big Five festival read.",
   },
   ready: {
     eyebrow: "Report ready",

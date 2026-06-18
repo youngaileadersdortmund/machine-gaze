@@ -14,7 +14,7 @@ from .schemas import (
     AdminSessionsResponse,
     HealthResponse,
     MessageResponse,
-    PrivacyReport,
+    PersonalityReport,
     SessionAdminRow,
     SessionCreateResponse,
     SessionPublicResponse,
@@ -48,7 +48,7 @@ from .storage import now_utc, read_limited_upload, sanitize_and_store_image
 
 
 def session_response(session: SessionModel) -> SessionPublicResponse:
-    report = PrivacyReport.model_validate(session.report_json) if session.report_json else None
+    report = PersonalityReport.model_validate(session.report_json) if session.report_json else None
     return SessionPublicResponse(
         id=session.id,
         status=session.status,
@@ -262,7 +262,7 @@ async def worker_image_route(job_id: str, db: AsyncSession = Depends(get_db)) ->
 )
 async def worker_complete_route(
     job_id: str,
-    report: PrivacyReport,
+    report: PersonalityReport,
     db: AsyncSession = Depends(get_db),
 ) -> MessageResponse:
     job = await get_job_or_404(db, job_id)

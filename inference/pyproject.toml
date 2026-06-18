@@ -1,25 +1,18 @@
 [project]
 name = "inference"
 version = "0.1.0"
-description = "Add your description here"
+description = "Machine Gaze Gemini Big Five inference worker."
 readme = "README.md"
-authors = [
-    { name = "Youssef Abdelrahim", email = "youssefezzatw@gmail.com" }
-]
 requires-python = ">=3.12"
 dependencies = [
-    "google-auth>=2.55.0",
-    "google-genai>=2.8.0",
+    "google-genai>=1.0.0",
     "httpx>=0.28.1",
-    "numpy>=2.4.6",
-    "opencv-python-headless>=4.13.0.92",
     "pillow>=12.2.0",
     "pydantic>=2.13.4",
-    "requests>=2.34.2",
+    "python-dotenv>=1.2.1",
 ]
 
 [project.scripts]
-inference = "inference:main"
 inference-worker = "inference.worker:main"
 
 [build-system]
@@ -31,21 +24,3 @@ dev = [
     "pytest>=9.0.3",
     "ruff>=0.15.16",
 ]
-gpu = [
-    "accelerate>=1.12.0",
-    "huggingface-hub>=1.2.1",
-    "json-repair>=0.54.2",
-    "safetensors>=0.7.0",
-    "torch>=2.7.0",
-    "torchvision>=0.22.0",
-    "transformers>=4.57.0",
-]
-
-[tool.uv.sources]
-torch = { index = "pytorch-cu128" }
-torchvision = { index = "pytorch-cu128" }
-
-[[tool.uv.index]]
-name = "pytorch-cu128"
-url = "https://download.pytorch.org/whl/cu128"
-explicit = true

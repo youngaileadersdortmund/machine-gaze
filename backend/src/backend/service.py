@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import JobModel, SessionModel, WorkerHeartbeatModel
-from .schemas import PrivacyReport
+from .schemas import PersonalityReport
 from .security import hash_token, verify_token
 from .settings import Settings
 from .storage import delete_path, now_utc
@@ -136,7 +136,7 @@ async def claim_next_job(db: AsyncSession) -> JobModel | None:
     return job
 
 
-async def complete_job(db: AsyncSession, job: JobModel, report: PrivacyReport) -> None:
+async def complete_job(db: AsyncSession, job: JobModel, report: PersonalityReport) -> None:
     session = await get_session_or_404(db, job.session_id)
     await ensure_active_session(session)
     job.status = "done"

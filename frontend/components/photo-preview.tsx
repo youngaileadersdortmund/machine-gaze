@@ -57,7 +57,7 @@ export function PhotoPreview({
             unoptimized
             priority
             alt={`Uploaded preview for ${participantName}`}
-            className="object-contain"
+            className="object-contain blur-[6px]"
             sizes="(min-width: 1280px) 32vw, (min-width: 1024px) 40vw, 90vw"
             src={previewUrl}
             onError={() => setFailedPreviewUrl(previewUrl)}
