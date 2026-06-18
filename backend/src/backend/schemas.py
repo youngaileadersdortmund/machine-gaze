@@ -21,7 +21,6 @@ class ModelMetadata(BaseModel):
 
 
 class PrivacyReport(BaseModel):
-    riskScore: int = Field(ge=0, le=100)
     observed: list[InsightGroup] = Field(min_length=1, max_length=8)
     speculative: list[InsightGroup] = Field(default_factory=list, max_length=8)
     targeting: list[str] = Field(default_factory=list, max_length=12)

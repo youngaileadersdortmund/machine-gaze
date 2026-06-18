@@ -81,15 +81,14 @@ need an explicit billing/quota project.
 `inference.contracts.PrivacyReport` contains:
 
 - `riskScore`: integer from `0` to `100`
-- `observed`: visible facts and privacy exposure signals
-- `speculative`: low-confidence profile-style guesses
-- `targeting`: ad-targeting simulation tags
-- `safetyNotes`: privacy and protected-trait guardrails
+- `observed`: persona-read sections displayed as the main dossier
+- `speculative`: deeper persona guesses displayed below the main dossier
+- `targeting`: influence hooks or ad/algorithmic categories
+- `safetyNotes`: optional notes, usually empty for Gemini persona reports
 - `model`: model name/version metadata
 
-The backend validates the same JSON shape before marking a session `ready`. The analyzer
-postprocesses model output so protected and sensitive traits stay in unsafe-overreach
-examples, never in observed facts.
+`riskScore` and group `confidence` remain in the wire contract for backend compatibility,
+but the frontend does not display them for Gemini persona reports.
 
 ## Checks
 

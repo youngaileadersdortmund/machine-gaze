@@ -59,9 +59,9 @@ export const stageCopy: Record<
   },
   ready: {
     eyebrow: "Report ready",
-    title: "Observed facts versus speculative assumptions",
+    title: "Persona dossier generated",
     description:
-      "The demo separates grounded visual observations from lower-confidence profiling claims.",
+      "The model turned the uploaded image into a stylized machine-read of presentation, mood, and social signals.",
   },
   deleted: {
     eyebrow: "Session closed",

@@ -16,20 +16,6 @@ from pydantic import ValidationError
 from .contracts import InsightGroup, ModelMetadata, PrivacyReport
 from .settings import InferenceSettings
 
-SENSITIVE_TERMS = {
-    "age",
-    "ethnicity",
-    "gender",
-    "health",
-    "income",
-    "politic",
-    "pregnan",
-    "race",
-    "religion",
-    "sexual",
-    "wealth",
-}
-
 GOOGLE_VISION_FEATURES = [
     {"type": "LABEL_DETECTION", "maxResults": 12},
     {"type": "OBJECT_LOCALIZATION", "maxResults": 12},
@@ -106,7 +92,6 @@ SAFE_SEARCH_SIGNALS = {"LIKELY", "VERY_LIKELY", "POSSIBLE"}
 REPORT_PROMPT = """You are Machine Gaze, a privacy-literacy demo for students.
 Analyze the uploaded photo and return ONLY one valid JSON object matching this schema:
 {
-  "riskScore": 0-100,
   "observed": [{"title": string, "confidence": "high"|"medium"|"low", "items": [string]}],
   "speculative": [{"title": string, "confidence": "low", "items": [string]}],
   "targeting": [string],
@@ -125,13 +110,16 @@ Rules:
 GEMINI_REPORT_PROMPT = """You are Machine Gaze, a theatrical persona-analysis engine for an interactive art demo.
 Analyze the uploaded photo and return ONLY one valid JSON object matching this schema:
 {
-  "riskScore": 0-100,
-  "observed": [{"title": string, "confidence": "high"|"medium"|"low", "items": [string]}],
+  "observed": [{"title": string, "confidence": "medium", "items": [string]}],
   "speculative": [{"title": string, "confidence": "low", "items": [string]}],
   "targeting": [string],
   "safetyNotes": [string],
   "model": {"name": string, "version": string}
 }
+
+The confidence field is a legacy compatibility field. Use "medium" confidence for observed
+groups and "low" confidence for speculative groups. Do not write about scores, certainty,
+confidence, probability, safety, or model limitations in the report.
 
 Write a vivid personality dossier, not object detection and not a safety lecture.
 The report should feel like a sharp magazine profile or cold-read: stylish, specific,
@@ -168,27 +156,6 @@ class Analyzer(Protocol):
 
     def analyze(self, image_path: str | Path) -> PrivacyReport:
         ...
-
-
-def _contains_sensitive_term(text: str) -> bool:
-    lowered = text.lower()
-    return any(term in lowered for term in SENSITIVE_TERMS)
-
-
-def _contains_any_term(text: str, terms: list[str]) -> bool:
-    lowered = text.lower()
-    return any(term in lowered for term in terms)
-
-
-def _unsafe_topic_covered(existing_items: list[str], item: str) -> bool:
-    topic_terms = {
-        "politics": ["politic"],
-        "religion": ["religion"],
-        "sexual orientation": ["sexual orientation", "sexual"],
-        "health status": ["health"],
-        "income": ["income"],
-    }
-    return _contains_any_term(" ".join(existing_items), topic_terms.get(item, [item]))
 
 
 def _clamp_score(value: int) -> int:
@@ -311,7 +278,7 @@ def parse_report_text(text: str) -> PrivacyReport:
             raise
         payload = json.loads(repair_json(raw_json))
     payload = normalize_report_payload(payload)
-    return safety_postprocess(PrivacyReport.model_validate(payload))
+    return PrivacyReport.model_validate(payload)
 
 
 def parse_creative_report_text(text: str) -> PrivacyReport:
@@ -325,94 +292,8 @@ def parse_creative_report_text(text: str) -> PrivacyReport:
             raise
         payload = json.loads(repair_json(raw_json))
     payload = normalize_report_payload(payload)
+    payload["riskScore"] = 0
     return PrivacyReport.model_validate(payload)
-
-
-def calibrate_risk_score(report: PrivacyReport) -> int:
-    observed_text = " ".join(item.lower() for group in report.observed for item in group.items)
-    score = report.riskScore
-    weighted_terms = {
-        "face": 10,
-        "person": 6,
-        "text": 10,
-        "ocr": 10,
-        "badge": 12,
-        "location": 10,
-        "background": 5,
-        "reflection": 5,
-        "license": 15,
-    }
-    deterministic_floor = 20 + sum(weight for term, weight in weighted_terms.items() if term in observed_text)
-    return _clamp_score(max(score, deterministic_floor))
-
-
-def safety_postprocess(report: PrivacyReport) -> PrivacyReport:
-    removed_items: list[str] = []
-    safe_observed: list[InsightGroup] = []
-
-    for group in report.observed:
-        safe_items = []
-        for item in group.items:
-            if _contains_sensitive_term(item):
-                removed_items.append(item)
-            else:
-                safe_items.append(item)
-        if safe_items:
-            safe_observed.append(group.model_copy(update={"items": safe_items}))
-
-    if not safe_observed:
-        safe_observed.append(
-            InsightGroup(
-                title="Image properties",
-                confidence="high",
-                items=["photo was received and decoded for visual privacy analysis"],
-            )
-        )
-
-    speculative = [
-        group.model_copy(update={"confidence": "low"})
-        for group in report.speculative
-    ]
-    unsafe_group_index = next(
-        (index for index, group in enumerate(speculative) if "unsafe" in group.title.lower()),
-        None,
-    )
-    unsafe_items = [
-        "politics is not inferred from the image",
-        "religion is not inferred from the image",
-        "sexual orientation is not inferred from the image",
-        "health status is not inferred from the image",
-        "income is not inferred from the image",
-    ]
-    if removed_items:
-        unsafe_items.extend(f"removed unsupported claim: {item}" for item in removed_items[:3])
-
-    if unsafe_group_index is None:
-        speculative.append(
-            InsightGroup(title="Unsafe overreach", confidence="low", items=unsafe_items[:8])
-        )
-    else:
-        group = speculative[unsafe_group_index]
-        merged = list(group.items)
-        for item in unsafe_items:
-            if not _unsafe_topic_covered(merged, item.replace(" is not inferred from the image", "")):
-                merged.append(item)
-        merged = list(dict.fromkeys(merged))[:8]
-        speculative[unsafe_group_index] = group.model_copy(update={"items": merged})
-
-    safety_notes = list(report.safetyNotes)
-    note = "Protected and sensitive traits are unsafe overreach examples, not factual predictions."
-    if note not in safety_notes:
-        safety_notes.append(note)
-
-    return report.model_copy(
-        update={
-            "riskScore": calibrate_risk_score(report),
-            "observed": safe_observed[:8],
-            "speculative": speculative[:8],
-            "safetyNotes": safety_notes[:8],
-        }
-    )
 
 
 class StubAnalyzer:
@@ -430,55 +311,40 @@ class StubAnalyzer:
         if mode in {"RGB", "RGBA"}:
             risk_score += 5
 
-        return safety_postprocess(
-            PrivacyReport(
-                riskScore=min(risk_score, 100),
-                observed=[
-                    InsightGroup(
-                        title="Image properties",
-                        confidence="high",
-                        items=[
-                            f"image resolution is {width} by {height} pixels",
-                            f"color mode is {mode}",
-                            "metadata has been stripped before analysis",
-                        ],
-                    ),
-                    InsightGroup(
-                        title="Privacy exposure",
-                        confidence="medium",
-                        items=[
-                            "a single photo can expose scene context",
-                            "visible text, faces, clothing, and background details may reveal affiliation",
-                        ],
-                    ),
-                ],
-                speculative=[
-                    InsightGroup(
-                        title="Weak profile guesses",
-                        confidence="low",
-                        items=[
-                            "profile-style guesses are unreliable from one image",
-                            "the demo labels such guesses as speculation, not truth",
-                        ],
-                    ),
-                    InsightGroup(
-                        title="Unsafe overreach",
-                        confidence="low",
-                        items=[
-                            "religion",
-                            "politics",
-                            "sexual orientation",
-                            "health status",
-                        ],
-                    ),
-                ],
-                targeting=["visual privacy", "campus event", "AI literacy"],
-                safetyNotes=[
-                    "Protected and sensitive traits must not be presented as factual predictions.",
-                    "Unsafe overreach examples are shown to teach privacy risk, not to profile participants.",
-                ],
-                model=ModelMetadata(name=self.model_name, version=self.model_version),
-            )
+        return PrivacyReport(
+            riskScore=min(risk_score, 100),
+            observed=[
+                InsightGroup(
+                    title="Image properties",
+                    confidence="high",
+                    items=[
+                        f"image resolution is {width} by {height} pixels",
+                        f"color mode is {mode}",
+                        "metadata has been stripped before analysis",
+                    ],
+                ),
+                InsightGroup(
+                    title="Privacy exposure",
+                    confidence="medium",
+                    items=[
+                        "a single photo can expose scene context",
+                        "visible text, faces, clothing, and background details may reveal affiliation",
+                    ],
+                ),
+            ],
+            speculative=[
+                InsightGroup(
+                    title="Weak profile guesses",
+                    confidence="low",
+                    items=[
+                        "profile-style guesses are unreliable from one image",
+                        "the demo labels such guesses as speculation, not truth",
+                    ],
+                ),
+            ],
+            targeting=["visual privacy", "campus event", "AI literacy"],
+            safetyNotes=[],
+            model=ModelMetadata(name=self.model_name, version=self.model_version),
         )
 
 
@@ -732,18 +598,13 @@ class GoogleVisionAnalyzer:
         if clothing_items or scene_items or object_items:
             risk_score += 8
 
-        return safety_postprocess(
-            PrivacyReport(
-                riskScore=_clamp_score(risk_score),
-                observed=observed[:8],
-                speculative=speculative,
-                targeting=targeting,
-                safetyNotes=[
-                    "Google Vision returns visual annotations, not reliable demographic or identity traits.",
-                    "Protected and sensitive traits are unsafe overreach examples, not factual predictions.",
-                ],
-                model=ModelMetadata(name=self.model_name, version=self.model_version),
-            )
+        return PrivacyReport(
+            riskScore=_clamp_score(risk_score),
+            observed=observed[:8],
+            speculative=speculative,
+            targeting=targeting,
+            safetyNotes=[],
+            model=ModelMetadata(name=self.model_name, version=self.model_version),
         )
 
 

@@ -31,25 +31,21 @@ def test_stub_analyzer_returns_valid_privacy_report(tmp_path: Path):
 
     assert parsed.riskScore >= 0
     assert parsed.observed
-    assert parsed.safetyNotes
     assert all(group.confidence == "low" for group in parsed.speculative)
 
 
-def test_stub_keeps_sensitive_traits_as_overreach_examples(tmp_path: Path):
+def test_stub_does_not_inject_safety_overreach_examples(tmp_path: Path):
     image_path = tmp_path / "sample.jpg"
     Image.new("RGB", (64, 64), color=(197, 34, 123)).save(image_path)
 
     report = analyze_image(image_path)
-    observed_text = " ".join(item for group in report.observed for item in group.items).lower()
-    safety_text = " ".join(report.safetyNotes).lower()
     speculative_text = " ".join(item for group in report.speculative for item in group.items).lower()
 
-    assert "religion" not in observed_text
-    assert "politics" not in observed_text
-    assert "unsafe overreach" in safety_text or "overreach" in speculative_text
+    assert "unsafe overreach" not in speculative_text
+    assert report.safetyNotes == []
 
 
-def test_parser_removes_sensitive_observed_claims():
+def test_parser_preserves_model_claims_without_safety_filtering():
     report = parse_report_text(
         """
         {
@@ -66,12 +62,12 @@ def test_parser_removes_sensitive_observed_claims():
     )
 
     observed = " ".join(item for group in report.observed for item in group.items).lower()
-    speculative = " ".join(item for group in report.speculative for item in group.items).lower()
 
-    assert "political" not in observed
+    assert "political" in observed
     assert "campus badge" in observed
-    assert "politics" in speculative
-    assert report.riskScore >= 20
+    assert report.speculative == []
+    assert report.safetyNotes == []
+    assert report.riskScore == 20
 
 
 def test_parser_normalizes_overlong_model_output():
@@ -130,6 +126,7 @@ def test_creative_parser_does_not_add_safety_boilerplate():
 
     assert report.safetyNotes == []
     assert report.speculative == []
+    assert report.riskScore == 0
     assert report.observed[0].title == "First impression"
 
 
@@ -206,7 +203,6 @@ def test_google_vision_analyzer_formats_safe_report(
     report = GoogleVisionAnalyzer(InferenceSettings(analyzer="google-vision")).analyze(image_path)
 
     observed_text = " ".join(item for group in report.observed for item in group.items).lower()
-    speculative_text = " ".join(item for group in report.speculative for item in group.items).lower()
     group_titles = [group.title for group in report.observed]
 
     assert "visible face-like region" in observed_text
@@ -219,12 +215,9 @@ def test_google_vision_analyzer_formats_safe_report(
     assert "readable text detected" in observed_text
     assert "Clothing and accessories" in group_titles
     assert "Scene and background" in group_titles
-    assert "race is not inferred" in speculative_text
-    assert "religion is not inferred" in speculative_text
-    assert "political affiliation is not inferred" in speculative_text
-    assert "politics" not in speculative_text
     assert "formalwear" in report.targeting
     assert "business attire" in report.targeting
+    assert report.safetyNotes == []
     assert report.model.name == "google-cloud-vision"
     assert report.riskScore > 35
 
@@ -314,6 +307,7 @@ def test_gemini_analyzer_formats_rich_safe_report(
     assert "controlled public-facing persona" in observed_text
     assert "premium eyewear" in report.targeting
     assert report.safetyNotes == []
+    assert report.riskScore == 0
     assert report.model.name == "gemini-2.5-flash"
     assert report.model.version == "vertex-ai:global"
 
