@@ -16,6 +16,8 @@
 - 2026-06-18T15:32:53+00:00 [CODE] Hardened Gemini JSON handling after incomplete JSON failure: default output budget raised to 4096, prompts request compact JSON, worker retries one invalid response, and debug prints flush immediately.
 - 2026-06-18T15:36:08+00:00 [CODE] Removed frontend model metadata card from result report and removed fake progress-step loaders from processing panel.
 - 2026-06-18T15:48:48+00:00 [CODE] Added `machineGuess` to personality report contract/inference prompt/frontend UI with fields `probablyStudies`, `campusRole`, `futureForecast`, and `classicStruggle`.
+- 2026-06-18T15:55:28+00:00 [CODE] Adjusted Machine's Guess panel to appear beside traits from `lg` breakpoint with fixed side width; made QR code and displayed upload URL clickable.
+- 2026-06-18T16:05:41+00:00 [CODE] Changed Machine's Guess layout to render below the full Big Five traits list instead of beside it.
 
 [DISCOVERIES]
 - 2026-06-18T10:58:01+00:00 [CODE] Backend already supports session creation, upload sanitization, authenticated worker claim/image/complete/fail endpoints, TTL cleanup, and structured `PrivacyReport` storage.
@@ -36,3 +38,5 @@
 - 2026-06-18T15:32:53+00:00 [TOOL] Verification: inference pytest and Ruff passed; no local `.env` override for `INFERENCE_MAX_OUTPUT_TOKENS` was found.
 - 2026-06-18T15:36:08+00:00 [TOOL] Verification: frontend lint/build passed; search confirmed removed model/progress-step copy absent from frontend components/libs.
 - 2026-06-18T15:48:48+00:00 [TOOL] Verification: backend pytest 11 passed with existing Starlette/httpx warning; inference pytest 7 passed; backend/inference Ruff passed; frontend lint/build passed; search confirmed no `privacy report`/`PrivacyReport` in touched active code.
+- 2026-06-18T15:55:28+00:00 [TOOL] Verification: frontend lint/build passed after QR clickability and Machine's Guess layout changes.
+- 2026-06-18T16:05:41+00:00 [TOOL] Verification: frontend lint/build passed after stacking Machine's Guess below traits.

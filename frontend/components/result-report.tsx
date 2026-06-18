@@ -61,7 +61,7 @@ export function ResultReport({ session }: { session: DemoSession }) {
     .filter((trait): trait is TraitReport => Boolean(trait));
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+    <div className="grid gap-5">
       <section>
         <h2 className="text-sm font-black uppercase tracking-[0.18em] text-brand-pink">
           Big Five read
