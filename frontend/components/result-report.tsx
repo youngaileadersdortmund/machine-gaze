@@ -51,7 +51,7 @@ export function ResultReport({ session }: { session: DemoSession }) {
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-sm font-black uppercase tracking-[0.16em] text-brand-black">
-              Privacy risk score
+              Persona intensity
             </p>
             <p className="mt-1 text-6xl font-black text-brand-pink">{session.riskScore}</p>
           </div>
@@ -63,30 +63,32 @@ export function ResultReport({ session }: { session: DemoSession }) {
               />
             </div>
             <p className="mt-2 text-sm font-medium text-brand-black/70">
-              Score is illustrative until calibrated with real model outputs.
+              A stylized machine reading, not a psychological diagnosis.
             </p>
           </div>
         </div>
       </section>
 
-      <InsightSection title="Observed facts" groups={session.observed} />
-      <InsightSection title="Speculative assumptions" groups={session.speculative} />
+      <InsightSection title="Persona read" groups={session.observed} />
+      <InsightSection title="Deeper guesses" groups={session.speculative} />
 
-      <section className="border-2 border-brand-black bg-white p-5 shadow-[6px_6px_0_#eda913]">
-        <h2 className="text-sm font-black uppercase tracking-[0.18em] text-brand-pink">
-          Targeting simulation
-        </h2>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {session.targeting.map((item) => (
-            <span
-              key={item}
-              className="rounded-full border-2 border-brand-black bg-brand-cream px-3 py-1.5 text-sm font-black text-brand-black"
-            >
-              {item}
-            </span>
-          ))}
-        </div>
-      </section>
+      {session.targeting.length ? (
+        <section className="border-2 border-brand-black bg-white p-5 shadow-[6px_6px_0_#eda913]">
+          <h2 className="text-sm font-black uppercase tracking-[0.18em] text-brand-pink">
+            Influence hooks
+          </h2>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {session.targeting.map((item) => (
+              <span
+                key={item}
+                className="rounded-full border-2 border-brand-black bg-brand-cream px-3 py-1.5 text-sm font-black text-brand-black"
+              >
+                {item}
+              </span>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {session.safetyNotes.length ? (
         <section className="border-2 border-brand-black bg-brand-yellow p-5 shadow-[6px_6px_0_#000]">

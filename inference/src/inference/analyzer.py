@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import base64
 import importlib.util
 import json
+import mimetypes
 from pathlib import Path
 from typing import Protocol
 
+import httpx
+import google.auth
+from google.auth.transport.requests import Request
 from PIL import Image
 from pydantic import ValidationError
 
@@ -25,6 +30,79 @@ SENSITIVE_TERMS = {
     "wealth",
 }
 
+GOOGLE_VISION_FEATURES = [
+    {"type": "LABEL_DETECTION", "maxResults": 12},
+    {"type": "OBJECT_LOCALIZATION", "maxResults": 12},
+    {"type": "TEXT_DETECTION", "maxResults": 8},
+    {"type": "FACE_DETECTION", "maxResults": 8},
+    {"type": "LANDMARK_DETECTION", "maxResults": 6},
+    {"type": "LOGO_DETECTION", "maxResults": 6},
+    {"type": "SAFE_SEARCH_DETECTION"},
+    {"type": "IMAGE_PROPERTIES", "maxResults": 8},
+]
+
+LOW_VALUE_LABEL_TERMS = {
+    "body",
+    "cheek",
+    "chin",
+    "ear",
+    "eyebrow",
+    "face",
+    "forehead",
+    "hair",
+    "head",
+    "human",
+    "jaw",
+    "lip",
+    "mouth",
+    "nose",
+    "person",
+    "photograph",
+    "skin",
+    "standing",
+}
+
+CLOTHING_TERMS = {
+    "blazer",
+    "coat",
+    "collar",
+    "dress shirt",
+    "eyeglasses",
+    "eyewear",
+    "formal wear",
+    "glasses",
+    "jacket",
+    "necktie",
+    "shirt",
+    "shoe",
+    "suit",
+    "tie",
+    "watch",
+}
+
+SCENE_TERMS = {
+    "architecture",
+    "building",
+    "facade",
+    "garden",
+    "grass",
+    "indoor",
+    "office",
+    "outdoor",
+    "palm",
+    "plant",
+    "road",
+    "room",
+    "sidewalk",
+    "street",
+    "tree",
+    "urban",
+    "wall",
+    "window",
+}
+
+SAFE_SEARCH_SIGNALS = {"LIKELY", "VERY_LIKELY", "POSSIBLE"}
+
 REPORT_PROMPT = """You are Machine Gaze, a privacy-literacy demo for students.
 Analyze the uploaded photo and return ONLY one valid JSON object matching this schema:
 {
@@ -44,6 +122,45 @@ Rules:
 - Keep each group concise. No markdown. No prose outside JSON.
 """
 
+GEMINI_REPORT_PROMPT = """You are Machine Gaze, a theatrical persona-analysis engine for an interactive art demo.
+Analyze the uploaded photo and return ONLY one valid JSON object matching this schema:
+{
+  "riskScore": 0-100,
+  "observed": [{"title": string, "confidence": "high"|"medium"|"low", "items": [string]}],
+  "speculative": [{"title": string, "confidence": "low", "items": [string]}],
+  "targeting": [string],
+  "safetyNotes": [string],
+  "model": {"name": string, "version": string}
+}
+
+Write a vivid personality dossier, not object detection and not a safety lecture.
+The report should feel like a sharp magazine profile or cold-read: stylish, specific,
+slightly unsettling, and based on the image's pose, styling, expression, setting, and composition.
+
+Use observed for persona-read sections such as:
+- First impression
+- Social mask
+- Style and status signals
+- Energy in the frame
+- Tensions and contradictions
+
+Use speculative for deeper personality-read sections such as:
+- Likely operating mode
+- Social strategy
+- Under pressure
+- Blind spots
+- What this image is trying to make you believe
+
+Rules:
+- Do not list obvious objects unless they support a personality interpretation.
+- Prefer phrases like "comes across as", "signals", "suggests", "reads as", "projects", and "the image performs".
+- Avoid bland lines like "wearing glasses", "dark hair", "outdoor setting", or "white shirt" unless tied to a persona claim.
+- Do not create an Unsafe overreach section. Leave safetyNotes empty unless there is a real model limitation.
+- Do not infer or state protected/sensitive traits: race, ethnicity, nationality, politics, religion, health, sexuality, gender identity, pregnancy, income, or wealth.
+- targeting should be influence hooks or ad/algorithmic categories, e.g. executive coaching, luxury grooming, premium eyewear, networking events, productivity apps, reputation management, portrait photography.
+- Keep each group concise: 3-5 punchy items. No markdown. No prose outside JSON.
+"""
+
 
 class Analyzer(Protocol):
     model_name: str
@@ -56,6 +173,22 @@ class Analyzer(Protocol):
 def _contains_sensitive_term(text: str) -> bool:
     lowered = text.lower()
     return any(term in lowered for term in SENSITIVE_TERMS)
+
+
+def _contains_any_term(text: str, terms: list[str]) -> bool:
+    lowered = text.lower()
+    return any(term in lowered for term in terms)
+
+
+def _unsafe_topic_covered(existing_items: list[str], item: str) -> bool:
+    topic_terms = {
+        "politics": ["politic"],
+        "religion": ["religion"],
+        "sexual orientation": ["sexual orientation", "sexual"],
+        "health status": ["health"],
+        "income": ["income"],
+    }
+    return _contains_any_term(" ".join(existing_items), topic_terms.get(item, [item]))
 
 
 def _clamp_score(value: int) -> int:
@@ -98,6 +231,75 @@ def extract_json_object(text: str) -> str:
     raise ValueError("Model output contained incomplete JSON.")
 
 
+def _string_list(value: object, *, limit: int) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()][:limit]
+
+
+def normalize_report_payload(payload: object) -> dict:
+    if not isinstance(payload, dict):
+        raise ValueError("Model output JSON was not an object.")
+
+    normalized: dict[str, object] = dict(payload)
+    normalized["riskScore"] = _clamp_score(int(normalized.get("riskScore") or 50))
+
+    observed = []
+    for group in normalized.get("observed") or []:
+        if not isinstance(group, dict):
+            continue
+        items = _string_list(group.get("items"), limit=8)
+        if not items:
+            continue
+        confidence = group.get("confidence")
+        if confidence not in {"high", "medium", "low"}:
+            confidence = "medium"
+        observed.append(
+            {
+                "title": str(group.get("title") or "Visual observations")[:80],
+                "confidence": confidence,
+                "items": items,
+            }
+        )
+
+    if not observed:
+        observed.append(
+            {
+                "title": "Visual observations",
+                "confidence": "medium",
+                "items": ["the model returned a sparse visual report for this image"],
+            }
+        )
+    normalized["observed"] = observed[:8]
+
+    speculative = []
+    for group in normalized.get("speculative") or []:
+        if not isinstance(group, dict):
+            continue
+        items = _string_list(group.get("items"), limit=8)
+        if not items:
+            continue
+        speculative.append(
+            {
+                "title": str(group.get("title") or "Plausible but uncertain assumptions")[:80],
+                "confidence": "low",
+                "items": items,
+            }
+        )
+    normalized["speculative"] = speculative[:8]
+    normalized["targeting"] = _string_list(normalized.get("targeting"), limit=12)
+    normalized["safetyNotes"] = _string_list(normalized.get("safetyNotes"), limit=8)
+
+    model = normalized.get("model")
+    if not isinstance(model, dict):
+        model = {}
+    normalized["model"] = {
+        "name": str(model.get("name") or "unknown")[:120],
+        "version": str(model.get("version") or "unknown")[:80],
+    }
+    return normalized
+
+
 def parse_report_text(text: str) -> PrivacyReport:
     raw_json = extract_json_object(text)
     try:
@@ -108,7 +310,22 @@ def parse_report_text(text: str) -> PrivacyReport:
         except ImportError:
             raise
         payload = json.loads(repair_json(raw_json))
+    payload = normalize_report_payload(payload)
     return safety_postprocess(PrivacyReport.model_validate(payload))
+
+
+def parse_creative_report_text(text: str) -> PrivacyReport:
+    raw_json = extract_json_object(text)
+    try:
+        payload = json.loads(raw_json)
+    except json.JSONDecodeError:
+        try:
+            from json_repair import repair_json
+        except ImportError:
+            raise
+        payload = json.loads(repair_json(raw_json))
+    payload = normalize_report_payload(payload)
+    return PrivacyReport.model_validate(payload)
 
 
 def calibrate_risk_score(report: PrivacyReport) -> int:
@@ -160,7 +377,13 @@ def safety_postprocess(report: PrivacyReport) -> PrivacyReport:
         (index for index, group in enumerate(speculative) if "unsafe" in group.title.lower()),
         None,
     )
-    unsafe_items = ["politics", "religion", "sexual orientation", "health status", "income"]
+    unsafe_items = [
+        "politics is not inferred from the image",
+        "religion is not inferred from the image",
+        "sexual orientation is not inferred from the image",
+        "health status is not inferred from the image",
+        "income is not inferred from the image",
+    ]
     if removed_items:
         unsafe_items.extend(f"removed unsupported claim: {item}" for item in removed_items[:3])
 
@@ -170,7 +393,11 @@ def safety_postprocess(report: PrivacyReport) -> PrivacyReport:
         )
     else:
         group = speculative[unsafe_group_index]
-        merged = list(dict.fromkeys([*group.items, *unsafe_items]))[:8]
+        merged = list(group.items)
+        for item in unsafe_items:
+            if not _unsafe_topic_covered(merged, item.replace(" is not inferred from the image", "")):
+                merged.append(item)
+        merged = list(dict.fromkeys(merged))[:8]
         speculative[unsafe_group_index] = group.model_copy(update={"items": merged})
 
     safety_notes = list(report.safetyNotes)
@@ -252,6 +479,344 @@ class StubAnalyzer:
                 ],
                 model=ModelMetadata(name=self.model_name, version=self.model_version),
             )
+        )
+
+
+def _score_label(entity: dict) -> str:
+    description = entity.get("description") or entity.get("name") or "unknown"
+    score = entity.get("score")
+    if isinstance(score, int | float):
+        return f"{description} ({score:.0%} confidence)"
+    return description
+
+
+def _annotation_name(annotation: str) -> str:
+    return annotation.split(" (", 1)[0].strip()
+
+
+def _annotation_key(annotation: str) -> str:
+    return _annotation_name(annotation).lower()
+
+
+def _matches_terms(annotation: str, terms: set[str]) -> bool:
+    key = _annotation_key(annotation)
+    return any(term in key for term in terms)
+
+
+def _meaningful_annotations(annotations: list[str], *, exclude: set[str] | None = None) -> list[str]:
+    excluded_terms = exclude or set()
+    return [
+        annotation
+        for annotation in annotations
+        if not _matches_terms(annotation, LOW_VALUE_LABEL_TERMS | excluded_terms)
+    ]
+
+
+def _likelihood(value: str | None) -> str:
+    return (value or "UNKNOWN").replace("_", " ").lower()
+
+
+def _top_items(items: list[str], fallback: str, limit: int = 8) -> list[str]:
+    unique = list(dict.fromkeys(item for item in items if item))
+    return unique[:limit] or [fallback]
+
+
+def _targeting_tag(annotation: str) -> str | None:
+    tag = _annotation_key(annotation)
+    if not tag or tag == "unknown":
+        return None
+    return tag
+
+
+def _ad_categories(annotations: list[str], detected_text: list[str], logos: list[str]) -> list[str]:
+    categories: list[str] = []
+    annotation_text = " ".join(_annotation_key(annotation) for annotation in annotations)
+
+    if any(term in annotation_text for term in {"suit", "tie", "coat", "blazer", "formal wear", "collar"}):
+        categories.extend(["formalwear", "business attire", "professional headshots"])
+    if any(term in annotation_text for term in {"glasses", "eyewear", "eyeglasses", "vision care"}):
+        categories.extend(["eyewear", "vision care"])
+    if any(term in annotation_text for term in {"plant", "tree", "grass", "outdoor", "garden"}):
+        categories.extend(["outdoor portraits", "landscaping"])
+    if detected_text:
+        categories.extend(["OCR-based retargeting", "brand or workplace lookup"])
+    if logos:
+        categories.append("brand affinity")
+
+    categories.extend(
+        tag
+        for tag in (_targeting_tag(annotation) for annotation in annotations)
+        if tag and not _matches_terms(tag, LOW_VALUE_LABEL_TERMS)
+    )
+    return _top_items(categories, "visual privacy education", limit=12)
+
+
+class GoogleVisionAnalyzer:
+    model_name = "google-cloud-vision"
+    model_version = "v1-images-annotate"
+    scopes = ("https://www.googleapis.com/auth/cloud-platform",)
+
+    def __init__(self, settings: InferenceSettings):
+        self.credentials, self.project_id = google.auth.default(scopes=self.scopes)
+        if settings.google_cloud_quota_project and hasattr(self.credentials, "with_quota_project"):
+            self.credentials = self.credentials.with_quota_project(settings.google_cloud_quota_project)
+        self.auth_request = Request()
+
+    def _headers(self) -> dict[str, str]:
+        if not self.credentials.valid:
+            self.credentials.refresh(self.auth_request)
+
+        headers = {"Authorization": f"Bearer {self.credentials.token}"}
+        quota_project_id = getattr(self.credentials, "quota_project_id", None)
+        if quota_project_id:
+            headers["x-goog-user-project"] = quota_project_id
+        return headers
+
+    def _annotate(self, image_path: Path) -> dict:
+        content = base64.b64encode(image_path.read_bytes()).decode("ascii")
+        payload = {
+            "requests": [
+                {
+                    "image": {"content": content},
+                    "features": GOOGLE_VISION_FEATURES,
+                }
+            ]
+        }
+        response = httpx.post(
+            "https://vision.googleapis.com/v1/images:annotate",
+            headers=self._headers(),
+            json=payload,
+            timeout=45,
+        )
+        response.raise_for_status()
+        result = response.json()["responses"][0]
+        if "error" in result:
+            message = result["error"].get("message", "Google Vision returned an error.")
+            raise RuntimeError(message)
+        return result
+
+    def analyze(self, image_path: str | Path) -> PrivacyReport:
+        image_path = Path(image_path)
+        result = self._annotate(image_path)
+
+        labels = [_score_label(entity) for entity in result.get("labelAnnotations", [])]
+        objects = [_score_label(entity) for entity in result.get("localizedObjectAnnotations", [])]
+        logos = [_score_label(entity) for entity in result.get("logoAnnotations", [])]
+        landmarks = [_score_label(entity) for entity in result.get("landmarkAnnotations", [])]
+        all_annotations = [*objects, *labels]
+
+        text_annotations = result.get("textAnnotations", [])
+        detected_text = []
+        if text_annotations:
+            full_text = text_annotations[0].get("description", "").strip().replace("\n", " / ")
+            if full_text:
+                detected_text.append(f"readable text detected: {full_text[:180]}")
+            detected_text.extend(_score_label(entity) for entity in text_annotations[1:6])
+
+        face_annotations = result.get("faceAnnotations", [])
+        people_items = []
+        if face_annotations:
+            people_items.append(f"{len(face_annotations)} visible face-like region(s) detected")
+            people_items.append("face detection enables biometric-style matching and photo clustering")
+            first_face = face_annotations[0]
+            emotion_items = [
+                f"{name} {_likelihood(first_face.get(field))}"
+                for name, field in [
+                    ("joy", "joyLikelihood"),
+                    ("sorrow", "sorrowLikelihood"),
+                    ("anger", "angerLikelihood"),
+                    ("surprise", "surpriseLikelihood"),
+                ]
+            ]
+            people_items.append(f"expression signals returned by Vision: {', '.join(emotion_items)}")
+        else:
+            people_items.append("no face-like regions detected by Google Vision")
+
+        safe_search = result.get("safeSearchAnnotation", {})
+        safety_items = [
+            f"{key.replace('_', ' ')} likelihood is {_likelihood(value)}"
+            for key, value in safe_search.items()
+            if key in {"adult", "violence", "racy", "medical", "spoof"} and value in SAFE_SEARCH_SIGNALS
+        ]
+
+        clothing_items = _meaningful_annotations(
+            [annotation for annotation in all_annotations if _matches_terms(annotation, CLOTHING_TERMS)]
+        )
+        scene_items = _meaningful_annotations(
+            [annotation for annotation in all_annotations if _matches_terms(annotation, SCENE_TERMS)]
+        )
+        object_items = _meaningful_annotations(
+            [
+                annotation
+                for annotation in all_annotations
+                if not _matches_terms(annotation, CLOTHING_TERMS | SCENE_TERMS)
+            ]
+        )
+
+        observed = [
+            InsightGroup(
+                title="People",
+                confidence="medium" if face_annotations else "low",
+                items=_top_items(people_items, "no people signals returned by Google Vision"),
+            )
+        ]
+        if clothing_items:
+            observed.append(
+                InsightGroup(
+                    title="Clothing and accessories",
+                    confidence="high",
+                    items=_top_items(clothing_items, "no clothing or accessory signals returned"),
+                )
+            )
+        if scene_items:
+            observed.append(
+                InsightGroup(
+                    title="Scene and background",
+                    confidence="medium",
+                    items=_top_items(scene_items, "no scene or background signals returned"),
+                )
+            )
+        if object_items:
+            observed.append(
+                InsightGroup(
+                    title="Other visual signals",
+                    confidence="medium",
+                    items=_top_items(object_items, "no additional visual signals returned"),
+                )
+            )
+        if detected_text:
+            observed.append(InsightGroup(title="Text", confidence="high", items=_top_items(detected_text, "")))
+        if logos or landmarks:
+            observed.append(
+                InsightGroup(
+                    title="Places and brands",
+                    confidence="medium",
+                    items=_top_items([*logos, *landmarks], "no places or brands returned"),
+                )
+            )
+        if safety_items:
+            observed.append(InsightGroup(title="Flagged content signals", confidence="medium", items=safety_items))
+
+        speculative = [
+            InsightGroup(
+                title="Unsafe overreach",
+                confidence="low",
+                items=[
+                    "race is not inferred from the image",
+                    "religion is not inferred from the image",
+                    "sexual orientation is not inferred from the image",
+                    "political affiliation is not inferred from the image",
+                    "income range is not inferred from the image",
+                ],
+            ),
+            InsightGroup(
+                title="Weak profile guesses",
+                confidence="low",
+                items=[
+                    "formal clothing can be used to guess professional context, but the guess may be wrong",
+                    "eyewear and clothing can feed ad categories without proving identity or intent",
+                    "ad categories below are simulated from visible cues, not a real profile",
+                ],
+            ),
+        ]
+
+        targeting = _ad_categories([*all_annotations, *logos], detected_text, logos)
+
+        risk_score = 35
+        if face_annotations:
+            risk_score += 15
+        if detected_text:
+            risk_score += 15
+        if logos or landmarks:
+            risk_score += 10
+        if clothing_items or scene_items or object_items:
+            risk_score += 8
+
+        return safety_postprocess(
+            PrivacyReport(
+                riskScore=_clamp_score(risk_score),
+                observed=observed[:8],
+                speculative=speculative,
+                targeting=targeting,
+                safetyNotes=[
+                    "Google Vision returns visual annotations, not reliable demographic or identity traits.",
+                    "Protected and sensitive traits are unsafe overreach examples, not factual predictions.",
+                ],
+                model=ModelMetadata(name=self.model_name, version=self.model_version),
+            )
+        )
+
+
+class GeminiAnalyzer:
+    model_version = "vertex-ai"
+
+    def __init__(self, settings: InferenceSettings):
+        settings.apply_environment()
+        self.settings = settings
+        self.model_name = settings.gemini_model_id
+        self.model_version = f"vertex-ai:{settings.google_cloud_location}"
+
+        from google import genai
+        from google.genai import types
+
+        project = settings.google_cloud_project
+        if not project:
+            _, project = google.auth.default(scopes=GoogleVisionAnalyzer.scopes)
+        if not project:
+            raise RuntimeError(
+                "GOOGLE_CLOUD_PROJECT is required for the Gemini analyzer. "
+                "Set it with `gcloud config set project YOUR_PROJECT_ID` and export GOOGLE_CLOUD_PROJECT."
+            )
+
+        self.types = types
+        self.client = genai.Client(
+            enterprise=settings.google_genai_use_enterprise,
+            vertexai=True,
+            project=project,
+            location=settings.google_cloud_location,
+        )
+
+    def _image_part(self, image_path: Path):
+        mime_type = mimetypes.guess_type(image_path.name)[0] or "image/jpeg"
+        return self.types.Part.from_bytes(data=image_path.read_bytes(), mime_type=mime_type)
+
+    def _generate_text(self, contents: list[object]) -> str:
+        config = self.types.GenerateContentConfig(
+            temperature=0.45,
+            maxOutputTokens=self.settings.max_new_tokens,
+            responseMimeType="application/json",
+            responseSchema=PrivacyReport,
+        )
+        response = self.client.models.generate_content(
+            model=self.settings.gemini_model_id,
+            contents=contents,
+            config=config,
+        )
+        text = getattr(response, "text", None)
+        if not text:
+            raise RuntimeError("Gemini did not return text.")
+        return text
+
+    def analyze(self, image_path: str | Path) -> PrivacyReport:
+        image_path = Path(image_path)
+        first_output = self._generate_text([self._image_part(image_path), GEMINI_REPORT_PROMPT])
+        try:
+            report = parse_creative_report_text(first_output)
+        except (ValueError, json.JSONDecodeError, ValidationError):
+            repair_prompt = (
+                "Repair this output into one valid JSON object matching the Machine Gaze "
+                "PrivacyReport schema. Return JSON only.\n\n"
+                f"Output:\n{first_output}"
+            )
+            try:
+                report = parse_creative_report_text(self._generate_text([repair_prompt]))
+            except (ValueError, json.JSONDecodeError, ValidationError) as repair_error:
+                raise RuntimeError(
+                    f"Gemini did not produce a valid privacy report: {repair_error}"
+                ) from repair_error
+
+        return report.model_copy(
+            update={"model": ModelMetadata(name=self.model_name, version=self.model_version)}
         )
 
 
@@ -359,6 +924,10 @@ def build_analyzer(settings: InferenceSettings | None = None) -> Analyzer:
         return StubAnalyzer()
     if mode == "qwen":
         return QwenAnalyzer(active_settings)
+    if mode == "gemini":
+        return GeminiAnalyzer(active_settings)
+    if mode in {"google", "google-vision", "vision"}:
+        return GoogleVisionAnalyzer(active_settings)
     if _qwen_runtime_available(active_settings):
         return QwenAnalyzer(active_settings)
     return StubAnalyzer()

@@ -1,7 +1,8 @@
 # Machine Gaze Inference
 
-Inference package for the festival prototype. It provides a fast stub analyzer for tests
-and a GPU analyzer for `Qwen/Qwen3-VL-30B-A3B-Thinking`.
+Inference package for the festival prototype. It provides a fast stub analyzer for tests,
+a Gemini analyzer for live privacy reports, a Google Vision API debug analyzer, and a GPU
+analyzer for `Qwen/Qwen3-VL-30B-A3B-Thinking`.
 
 The report separates visible observations from weak speculation and keeps sensitive or
 protected traits as unsafe-overreach examples, not factual predictions.
@@ -31,7 +32,7 @@ export HF_HOME=../hf_cache
 Start the backend first. Then from this directory:
 
 ```bash
-uv run --group gpu inference-worker --daemon \
+uv run inference-worker --daemon --analyzer gemini \
   --backend-url http://localhost:8000 \
   --worker-token dev-worker-token
 ```
@@ -49,6 +50,31 @@ For a fast smoke test without the model:
 ```bash
 INFERENCE_ANALYZER=stub uv run inference-worker --once
 ```
+
+For Gemini on Vertex AI:
+
+```bash
+gcloud auth application-default login
+gcloud auth application-default set-quota-project your-project-id
+export GOOGLE_CLOUD_PROJECT=your-project-id
+export GOOGLE_CLOUD_LOCATION=global
+export GOOGLE_GENAI_USE_ENTERPRISE=true
+uv run inference-worker --daemon --analyzer gemini \
+  --backend-url http://localhost:8000 \
+  --worker-token dev-worker-token
+```
+
+For Google Cloud Vision without the local GPU model:
+
+```bash
+gcloud auth application-default login
+uv run inference-worker --daemon --analyzer google-vision \
+  --backend-url http://localhost:8000 \
+  --worker-token dev-worker-token
+```
+
+Set `GOOGLE_CLOUD_QUOTA_PROJECT=your-project-id` if your local ADC user credentials
+need an explicit billing/quota project.
 
 ## Report Contract
 

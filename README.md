@@ -3,7 +3,7 @@
 An interactive visual privacy demo for a university festival. Machine Gaze shows what AI systems can observe, infer, and over-assume from a single uploaded photo.
 
 The current version contains a connected frontend, a working FastAPI backend, a fast
-stub worker for smoke tests, and a Qwen GPU worker for live privacy reports.
+stub worker for smoke tests, and a Gemini worker for live privacy reports.
 
 ## Project Structure
 
@@ -35,6 +35,7 @@ http://localhost:3000/upload/MG-42A9
 
 - Node.js and npm for the frontend
 - uv and Python 3.12 for backend/inference development
+- Google Cloud ADC with Vertex AI enabled for the Gemini inference worker
 - Optional: NVIDIA GPU + CUDA-compatible PyTorch for the Qwen inference worker
 
 On many university clusters, Node is loaded through `nvm` or a module system. If `npm`
@@ -65,7 +66,7 @@ Defaults:
 
 - frontend: `http://localhost:3000`
 - backend health: `http://localhost:8000/health`
-- inference worker: real `qwen` analyzer
+- inference worker: real `gemini` analyzer
 - backend token defaults come from `.env.example`
 
 For a fast smoke test without loading the model:
@@ -74,8 +75,33 @@ For a fast smoke test without loading the model:
 INFERENCE_ANALYZER=stub ./scripts/run-dev.sh
 ```
 
-The default Qwen path downloads model weights into `HF_HOME` on first run. It needs a
-visible NVIDIA GPU and the `inference` GPU dependency group.
+The default Gemini path uses Google Cloud Application Default Credentials and Vertex AI.
+Before running live reports, authenticate and set your project:
+
+```bash
+gcloud auth application-default login
+gcloud auth application-default set-quota-project your-project-id
+export GOOGLE_CLOUD_PROJECT=your-project-id
+export GOOGLE_CLOUD_LOCATION=global
+export GOOGLE_GENAI_USE_ENTERPRISE=true
+```
+
+The Qwen path is still available for local GPU inference. It downloads model weights
+into `HF_HOME` on first run and needs the `inference` GPU dependency group.
+
+To use Google Cloud Vision as a lower-level debug analyzer, authenticate with
+Application Default Credentials and choose the Google analyzer:
+
+```bash
+gcloud auth application-default login
+INFERENCE_ANALYZER=google-vision ./scripts/run-dev.sh
+```
+
+The Google Vision analyzer returns grounded visual annotations such as people/object
+signals, OCR text, logos, landmarks, safe-search likelihoods, and image properties. It
+does not infer sensitive traits such as race, religion, sexuality, politics, or income.
+If your ADC user credentials need an explicit billing/quota project, set
+`GOOGLE_CLOUD_QUOTA_PROJECT=your-project-id`.
 
 ### Remote Cluster Access
 
@@ -122,6 +148,26 @@ Terminal 3, fast stub inference worker:
 cd inference
 uv sync
 INFERENCE_ANALYZER=stub uv run inference-worker --daemon \
+  --backend-url http://localhost:8000 \
+  --worker-token dev-worker-token
+```
+
+Terminal 3, Gemini worker:
+
+```bash
+cd inference
+uv sync
+uv run inference-worker --daemon --analyzer gemini \
+  --backend-url http://localhost:8000 \
+  --worker-token dev-worker-token
+```
+
+Terminal 3, Google Vision worker:
+
+```bash
+cd inference
+uv sync
+uv run inference-worker --daemon --analyzer google-vision \
   --backend-url http://localhost:8000 \
   --worker-token dev-worker-token
 ```
@@ -268,6 +314,26 @@ INFERENCE_ANALYZER=stub uv run inference-worker --daemon \
   --worker-token dev-worker-token
 ```
 
+Google Vision worker:
+
+```bash
+cd inference
+uv sync
+uv run inference-worker --daemon --analyzer google-vision \
+  --backend-url http://localhost:8000 \
+  --worker-token dev-worker-token
+```
+
+Gemini worker:
+
+```bash
+cd inference
+uv sync
+uv run inference-worker --daemon --analyzer gemini \
+  --backend-url http://localhost:8000 \
+  --worker-token dev-worker-token
+```
+
 Real Qwen GPU worker:
 
 ```bash
@@ -278,7 +344,8 @@ uv run --group gpu inference-worker --daemon --analyzer qwen \
   --worker-token dev-worker-token
 ```
 
-The inference project owns the report contract, a test stub, and a Qwen GPU worker for:
+The inference project owns the report contract, a test stub, a Gemini worker, a Google
+Vision worker, and a Qwen GPU worker for:
 
 - image preprocessing
 - OCR

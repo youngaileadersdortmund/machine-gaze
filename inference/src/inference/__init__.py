@@ -1,4 +1,11 @@
-from .analyzer import QwenAnalyzer, StubAnalyzer, analyze_image, build_analyzer
+from .analyzer import (
+    GeminiAnalyzer,
+    GoogleVisionAnalyzer,
+    QwenAnalyzer,
+    StubAnalyzer,
+    analyze_image,
+    build_analyzer,
+)
 from .contracts import InsightGroup, ModelMetadata, PrivacyReport
 
 
@@ -10,6 +17,8 @@ __all__ = [
     "InsightGroup",
     "ModelMetadata",
     "PrivacyReport",
+    "GeminiAnalyzer",
+    "GoogleVisionAnalyzer",
     "QwenAnalyzer",
     "StubAnalyzer",
     "analyze_image",

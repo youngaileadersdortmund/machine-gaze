@@ -154,6 +154,11 @@ def run_once(backend_url: str, worker_token: str) -> bool:
         device_mode=settings.device_mode,
         analyzer=settings.analyzer,
         attn_implementation=settings.attn_implementation,
+        google_cloud_quota_project=settings.google_cloud_quota_project,
+        google_cloud_project=settings.google_cloud_project,
+        google_cloud_location=settings.google_cloud_location,
+        google_genai_use_enterprise=settings.google_genai_use_enterprise,
+        gemini_model_id=settings.gemini_model_id,
     )
     return run_worker(settings, daemon=False)
 
@@ -168,7 +173,12 @@ def main() -> None:
     parser.add_argument("--poll-seconds", type=float, default=defaults.poll_seconds)
     parser.add_argument("--max-new-tokens", type=int, default=defaults.max_new_tokens)
     parser.add_argument("--device-mode", default=defaults.device_mode)
-    parser.add_argument("--analyzer", choices=["auto", "qwen", "stub"], default=defaults.analyzer)
+    parser.add_argument(
+        "--analyzer",
+        choices=["auto", "qwen", "stub", "gemini", "google", "google-vision", "vision"],
+        default=defaults.analyzer,
+    )
+    parser.add_argument("--gemini-model-id", default=defaults.gemini_model_id)
     parser.add_argument("--attn-implementation", default=defaults.attn_implementation)
     parser.add_argument("--daemon", action="store_true")
     parser.add_argument("--once", action="store_true")
@@ -184,6 +194,11 @@ def main() -> None:
         device_mode=args.device_mode,
         analyzer=args.analyzer,
         attn_implementation=args.attn_implementation,
+        google_cloud_quota_project=defaults.google_cloud_quota_project,
+        google_cloud_project=defaults.google_cloud_project,
+        google_cloud_location=defaults.google_cloud_location,
+        google_genai_use_enterprise=defaults.google_genai_use_enterprise,
+        gemini_model_id=args.gemini_model_id,
     )
     processed = run_worker(settings, daemon=args.daemon and not args.once)
     print("processed one job" if processed else "no queued jobs")

@@ -7,7 +7,7 @@ BACKEND_PORT="${BACKEND_PORT:-8000}"
 FRONTEND_PORT="${FRONTEND_PORT:-3000}"
 BACKEND_URL="${INFERENCE_BACKEND_URL:-http://localhost:${BACKEND_PORT}}"
 WORKER_TOKEN="${INFERENCE_WORKER_TOKEN:-${WORKER_TOKEN:-dev-worker-token}}"
-INFERENCE_MODE="${INFERENCE_ANALYZER:-qwen}"
+INFERENCE_MODE="${INFERENCE_ANALYZER:-gemini}"
 
 if [ -f "${HOME}/.profile" ]; then
   # Helpful on clusters where Node is loaded through nvm from the login profile.
@@ -95,9 +95,12 @@ wait_for_backend
 if [ "${INFERENCE_MODE}" = "stub" ]; then
   start_service "inference" "${ROOT_DIR}/inference" \
     "uv sync && INFERENCE_ANALYZER=stub uv run inference-worker --daemon --backend-url ${BACKEND_URL} --worker-token ${WORKER_TOKEN}"
+elif [ "${INFERENCE_MODE}" = "qwen" ]; then
+  start_service "inference" "${ROOT_DIR}/inference" \
+    "uv sync --group gpu && uv run --group gpu inference-worker --daemon --analyzer qwen --backend-url ${BACKEND_URL} --worker-token ${WORKER_TOKEN}"
 else
   start_service "inference" "${ROOT_DIR}/inference" \
-    "uv sync --group gpu && uv run --group gpu inference-worker --daemon --analyzer ${INFERENCE_MODE} --backend-url ${BACKEND_URL} --worker-token ${WORKER_TOKEN}"
+    "uv sync && uv run inference-worker --daemon --analyzer ${INFERENCE_MODE} --backend-url ${BACKEND_URL} --worker-token ${WORKER_TOKEN}"
 fi
 
 cat <<EOF
