@@ -18,6 +18,7 @@
 - 2026-06-18T15:48:48+00:00 [CODE] Added `machineGuess` to personality report contract/inference prompt/frontend UI with fields `probablyStudies`, `campusRole`, `futureForecast`, and `classicStruggle`.
 - 2026-06-18T15:55:28+00:00 [CODE] Adjusted Machine's Guess panel to appear beside traits from `lg` breakpoint with fixed side width; made QR code and displayed upload URL clickable.
 - 2026-06-18T16:05:41+00:00 [CODE] Changed Machine's Guess layout to render below the full Big Five traits list instead of beside it.
+- 2026-06-18T16:13:45+00:00 [CODE] Fixed `scripts/run-dev.sh` startup ergonomics: `.env` now fills only unset non-empty defaults, active mismatched virtualenvs are ignored, missing `GOOGLE_CLOUD_PROJECT` fails before services start, and `SKIP_INFERENCE=1` starts only backend/frontend.
 
 [DISCOVERIES]
 - 2026-06-18T10:58:01+00:00 [CODE] Backend already supports session creation, upload sanitization, authenticated worker claim/image/complete/fail endpoints, TTL cleanup, and structured `PrivacyReport` storage.
@@ -40,3 +41,4 @@
 - 2026-06-18T15:48:48+00:00 [TOOL] Verification: backend pytest 11 passed with existing Starlette/httpx warning; inference pytest 7 passed; backend/inference Ruff passed; frontend lint/build passed; search confirmed no `privacy report`/`PrivacyReport` in touched active code.
 - 2026-06-18T15:55:28+00:00 [TOOL] Verification: frontend lint/build passed after QR clickability and Machine's Guess layout changes.
 - 2026-06-18T16:05:41+00:00 [TOOL] Verification: frontend lint/build passed after stacking Machine's Guess below traits.
+- 2026-06-18T16:13:45+00:00 [TOOL] Verification: `bash -n scripts/run-dev.sh` passed; missing `GOOGLE_CLOUD_PROJECT` preflight exits with setup instructions before launching services.

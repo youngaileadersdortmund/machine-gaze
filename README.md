@@ -70,6 +70,12 @@ From the project root, start backend, frontend, and the worker together:
 ./scripts/run-dev.sh
 ```
 
+For UI-only work without the inference worker:
+
+```bash
+SKIP_INFERENCE=1 ./scripts/run-dev.sh
+```
+
 Defaults:
 
 - frontend: `http://localhost:3000`
