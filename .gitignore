@@ -9,6 +9,8 @@
 *.json.key
 credentials/
 secrets/
+ngrok
+CONTINUITY.md
 
 # Python
 __pycache__/
@@ -135,3 +137,5 @@ Thumbs.db
 *.tar.gz
 *.tgz
 *.rar
+.agent/CONTINUITY.md
+.agent/CONTINUITY.md
